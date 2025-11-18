@@ -1,0 +1,29 @@
+{
+  "summary": {
+    "files": 4,
+    "unresolved": 0,
+    "withI18n": 4
+  },
+  "items": [
+    {
+      "file": "src/app/app.component.html",
+      "remaining": [],
+      "hasI18n": true
+    },
+    {
+      "file": "src/app/examples/alias-getter/alias-getter.component.html",
+      "remaining": [],
+      "hasI18n": true
+    },
+    {
+      "file": "src/app/examples/merge-assign/merge-assign.component.html",
+      "remaining": [],
+      "hasI18n": true
+    },
+    {
+      "file": "src/app/examples/service-di/service-di.component.html",
+      "remaining": [],
+      "hasI18n": true
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+[
+  {
+    "file": "src/app/app.component.html",
+    "varNames": [
+      "T"
+    ],
+    "count": 1,
+    "findings": [
+      {
+        "type": "simple",
+        "var": "item",
+        "path": "title"
+      }
+    ]
+  },
+  {
+    "file": "src/app/examples/alias-getter/alias-getter.component.html",
+    "varNames": [
+      "T"
+    ],
+    "count": 1,
+    "findings": [
+      {
+        "type": "simple",
+        "var": "L",
+        "path": "app.description"
+      }
+    ]
+  },
+  {
+    "file": "src/app/examples/merge-assign/merge-assign.component.html",
+    "varNames": [
+      "T"
+    ],
+    "count": 2,
+    "findings": [
+      {
+        "type": "simple",
+        "var": "dict",
+        "path": "app.description"
+      },
+      {
+        "type": "replace",
+        "var": "dict",
+        "path": "templates.itemTpl"
+      }
+    ]
+  },
+  {
+    "file": "src/app/examples/service-di/service-di.component.html",
+    "varNames": [
+      "T"
+    ],
+    "count": 1,
+    "findings": [
+      {
+        "type": "simple",
+        "var": "dict",
+        "path": "app.description"
+      }
+    ]
+  }
+]

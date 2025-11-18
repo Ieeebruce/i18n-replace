@@ -1,0 +1,9 @@
+<section style="padding:1rem">
+  <div style="display:flex; gap:0.5rem">
+    <button class="pill" (click)="switch('zh')">中文</button>
+    <button class="pill" (click)="switch('en')">English</button>
+  </div>
+  <h2 i18n>标题C</h2>
+  <p>{{ dict.app.description }}</p>
+  <p i18n>B：{{ '王五' }} 有 {{ 7 }} 条通知。</p>
+</section>
