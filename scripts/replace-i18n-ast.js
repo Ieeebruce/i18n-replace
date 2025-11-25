@@ -95,11 +95,25 @@ function findLocaleVarNames(sf, serviceName) {
 function collectVarRootOrder(sf, serviceName) {
   const map = new Map()
   function isServiceGetCall(expr) {
-    return expr && ts.isCallExpression(expr) && ts.isPropertyAccessExpression(expr.expression) && expr.expression.name.getText() === 'get' && ts.isPropertyAccessExpression(expr.expression.expression) && expr.expression.expression.name.getText() === serviceName
+    if (!expr || !ts.isCallExpression(expr)) return false
+    const ex = expr.expression
+    return ts.isPropertyAccessExpression(ex) && ex.name.getText(sf) === 'get' && ts.isPropertyAccessExpression(ex.expression) && ex.expression.expression && ex.expression.expression.kind === ts.SyntaxKind.ThisKeyword && ex.expression.name.getText(sf) === serviceName
   }
   function visit(node) {
-    if (ts.isConstructorDeclaration(node) || ts.isMethodDeclaration(node) || ts.isPropertyDeclaration(node)) {
-      const body = ts.isPropertyDeclaration(node) ? null : node.body
+    if (ts.isPropertyDeclaration(node) && node.initializer && ts.isObjectLiteralExpression(node.initializer)) {
+      const spreads = node.initializer.properties.filter(p => ts.isSpreadAssignment(p))
+      const roots = []
+      for (const sp of spreads) {
+        const expr = sp.expression
+        if (isServiceGetCall(expr)) {
+          const arg = expr.arguments[0]
+          if (arg && ts.isStringLiteral(arg)) roots.push(arg.text)
+        }
+      }
+      if (roots.length && node.name && ts.isIdentifier(node.name)) map.set(node.name.getText(sf), roots)
+    }
+    if (ts.isConstructorDeclaration(node) || ts.isMethodDeclaration(node)) {
+      const body = node.body
       const statements = body ? body.statements : []
       for (const s of statements) {
         if (ts.isExpressionStatement(s) && ts.isBinaryExpression(s.expression)) {
@@ -114,7 +128,7 @@ function collectVarRootOrder(sf, serviceName) {
                 if (arg && ts.isStringLiteral(arg)) roots.push(arg.text)
               }
             }
-            if (roots.length && ts.isIdentifier(be.left.name)) map.set(be.left.name.getText(), roots)
+            if (roots.length && ts.isIdentifier(be.left.name)) map.set(be.left.name.getText(sf), roots)
           }
         }
       }
