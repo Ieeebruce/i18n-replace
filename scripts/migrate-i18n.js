@@ -155,8 +155,8 @@ function findTemplateVarNames(tsSource, alias) {
 }
 
 function main() {
-  const i18nTs = path.join(process.cwd(), 'src', 'app', 'i18n', 'index.ts')
-  const tsSource = readFile(i18nTs)
+  const zhTs = path.join(process.cwd(), 'src', 'app', 'i18n', 'zh.ts')
+  const tsSource = readFile(zhTs)
   const zhObjText = extractObject(tsSource, 'zh')
   const jsonText = tsObjectToJSON(zhObjText)
   const zhPack = JSON.parse(jsonText)

@@ -3,27 +3,28 @@ const path = require('path')
 const { readFile, extractObject, tsObjectToJSON } = require('./lib/i18n-utils')
 
 function main() {
-  const i18nTs = path.join(process.cwd(), 'src', 'app', 'i18n', 'index.ts')
-  const tsSource = readFile(i18nTs)
+  const zhTs = path.join(process.cwd(), 'src', 'app', 'i18n', 'zh.ts')
+  const enTs = path.join(process.cwd(), 'src', 'app', 'i18n', 'en.ts')
   const packs = {}
-  for (const name of ['zh', 'en']) {
-    try {
-      const text = extractObject(tsSource, name)
-      const json = tsObjectToJSON(text)
-      packs[name] = JSON.parse(json)
-    } catch (e) {}
-  }
+  try {
+    const text = extractObject(readFile(zhTs), 'zh')
+    packs.zh = JSON.parse(tsObjectToJSON(text))
+  } catch (e) {}
+  try {
+    const text = extractObject(readFile(enTs), 'en')
+    packs.en = JSON.parse(tsObjectToJSON(text))
+  } catch (e) {}
   // optional merged packs (Object.assign order: A <- B <- C)
   try {
-    const zhA = JSON.parse(tsObjectToJSON(extractObject(tsSource, 'zhA')))
-    const zhB = JSON.parse(tsObjectToJSON(extractObject(tsSource, 'zhB')))
-    const zhC = JSON.parse(tsObjectToJSON(extractObject(tsSource, 'zhC')))
+    const zhA = JSON.parse(tsObjectToJSON(extractObject(readFile(zhTs), 'zhA')))
+    const zhB = JSON.parse(tsObjectToJSON(extractObject(readFile(zhTs), 'zhB')))
+    const zhC = JSON.parse(tsObjectToJSON(extractObject(readFile(zhTs), 'zhC')))
     packs.zhMerged = Object.assign({}, zhA, zhB, zhC)
   } catch {}
   try {
-    const enA = JSON.parse(tsObjectToJSON(extractObject(tsSource, 'enA')))
-    const enB = JSON.parse(tsObjectToJSON(extractObject(tsSource, 'enB')))
-    const enC = JSON.parse(tsObjectToJSON(extractObject(tsSource, 'enC')))
+    const enA = JSON.parse(tsObjectToJSON(extractObject(readFile(enTs), 'enA')))
+    const enB = JSON.parse(tsObjectToJSON(extractObject(readFile(enTs), 'enB')))
+    const enC = JSON.parse(tsObjectToJSON(extractObject(readFile(enTs), 'enC')))
     packs.enMerged = Object.assign({}, enA, enB, enC)
   } catch {}
   const out = JSON.stringify(packs, null, 2)

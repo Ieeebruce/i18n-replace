@@ -3,8 +3,8 @@ const path = require('path')
 const { readFile, extractObject, tsObjectToJSON, migrateHTML, mapTemplateToVarNames } = require('./lib/i18n-utils')
 
 function main() {
-  const i18nTs = path.join(process.cwd(), 'src', 'app', 'i18n', 'index.ts')
-  const tsSource = readFile(i18nTs)
+  const zhTs = path.join(process.cwd(), 'src', 'app', 'i18n', 'zh.ts')
+  const tsSource = readFile(zhTs)
   let zhPack
   try {
     const zhA = JSON.parse(tsObjectToJSON(extractObject(tsSource, 'zhA')))
