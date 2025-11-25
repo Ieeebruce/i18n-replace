@@ -15,6 +15,7 @@ export class AppComponent {
   i18n;
   constructor(public locale: I18nLocaleService) {
     this.i18n = this.locale.getLocale();
+    this.title = this.i18n.title;
   }
 
   switch(lang: 'en' | 'zh') {

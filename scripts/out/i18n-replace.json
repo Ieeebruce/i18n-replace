@@ -1,21 +1,21 @@
 {
-  "changed": 0,
+  "changed": 4,
   "results": [
     {
-      "file": "src/app/app.component.html",
-      "changed": false
+      "file": "src2/app/app.component.html",
+      "changed": true
     },
     {
-      "file": "src/app/examples/alias-getter/alias-getter.component.html",
-      "changed": false
+      "file": "src2/app/examples/alias-getter/alias-getter.component.html",
+      "changed": true
     },
     {
-      "file": "src/app/examples/merge-assign/merge-assign.component.html",
-      "changed": false
+      "file": "src2/app/examples/merge-assign/merge-assign.component.html",
+      "changed": true
     },
     {
-      "file": "src/app/examples/service-di/service-di.component.html",
-      "changed": false
+      "file": "src2/app/examples/service-di/service-di.component.html",
+      "changed": true
     }
   ]
 }

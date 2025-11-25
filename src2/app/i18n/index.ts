@@ -13,6 +13,17 @@ export class I18nLocaleService {
     }
     return this.lang === 'en' ? en : zh;
   }
+  get(key: string, params?: Record<string, unknown>) {
+    const pack = this.getLocale() as any;
+    const val = key.split('.').reduce((o, k) => (o ? o[k] : undefined), pack);
+    let s = typeof val === 'string' ? val : '';
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        s = s.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
+      }
+    }
+    return s;
+  }
   setLang(code: 'en' | 'zh') {
     this.lang = code;
     // 缓存到localStorage

@@ -3,7 +3,14 @@ const path = require('path')
 const { readFile, extractObject, tsObjectToJSON, migrateHTML, mapTemplateToVarNames } = require('./lib/i18n-utils')
 
 function main() {
-  const zhTs = path.join(process.cwd(), 'src', 'app', 'i18n', 'zh.ts')
+  const args = process.argv.slice(2)
+  let srcDirName = 'src'
+  for (const a of args) {
+    const m = a.match(/^--dir=(.+)$/)
+    if (m) srcDirName = m[1]
+    else if (!a.startsWith('--')) srcDirName = a
+  }
+  const zhTs = path.join(process.cwd(), srcDirName, 'app', 'i18n', 'zh.ts')
   const tsSource = readFile(zhTs)
   let zhPack
   try {
@@ -15,7 +22,7 @@ function main() {
     const zhText = extractObject(tsSource, 'zh')
     zhPack = JSON.parse(tsObjectToJSON(zhText))
   }
-  const map = mapTemplateToVarNames(process.cwd())
+  const map = mapTemplateToVarNames(process.cwd(), srcDirName)
   const results = []
   for (const [htmlPath, varNames] of map.entries()) {
     const html = readFile(htmlPath)

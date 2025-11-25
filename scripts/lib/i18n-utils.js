@@ -80,12 +80,28 @@ function transformInterpolationLine(line, pack, varNames) {
       const pairs = paramsText.split(',').map(s => s.trim()).filter(Boolean)
       const map = {}
       for (const p of pairs) {
-        const m2 = p.match(/([A-Za-z_][\w]*)\s*:\s*(.+)$/)
+        const m2 = p.match(/([A-Za-z_][\\w]*)\\s*:\\s*(.+)$/)
         if (m2) map[m2[1]] = m2[2]
       }
       let out = tpl
       for (const [k, vExpr] of Object.entries(map)) {
         out = out.replace(new RegExp(`\\{${k}\\}`, 'g'), `{{ ${vExpr} }}`)
+      }
+      return out
+    })
+  }
+  for (const v of varNames) {
+    const reChain = new RegExp(`\\{\\{\\s*${v}\\.([\\w.]+)((?:\\.replace\\(\\s*'[^']+'\\s*,\\s*[^)]+\\s*\\)\\s*)+)\\s*\\}\\}`)
+    changed = changed.replace(reChain, (m, pathStr, chainText) => {
+      const tpl = tryResolvePath(pack, pathStr)
+      if (typeof tpl !== 'string') return m
+      const reOne = /\\.replace\\(\\s*'([^']+)'\\s*,\\s*([^)]+)\\s*\\)/g
+      let out = tpl
+      let mg
+      while ((mg = reOne.exec(chainText))) {
+        const key = mg[1]
+        const vExpr = mg[2]
+        out = out.replace(new RegExp(`\\{${key}\\}`, 'g'), `{{ ${vExpr} }}`)
       }
       return out
     })
@@ -156,8 +172,8 @@ function findTemplateVarNames(tsSource, alias, html) {
   return Array.from(names)
 }
 
-function mapTemplateToVarNames(projectRoot) {
-  const srcDir = path.join(projectRoot, 'src')
+function mapTemplateToVarNames(projectRoot, srcDirName = 'src') {
+  const srcDir = path.join(projectRoot, srcDirName)
   const tsFiles = walk(srcDir, p => p.endsWith('.ts'))
   const map = new Map()
   for (const tsf of tsFiles) {

@@ -1,0 +1,53 @@
+{
+  "changed": 4,
+  "results": [
+    {
+      "file": "src2/app/app.component.spec.ts",
+      "changed": false
+    },
+    {
+      "file": "src2/app/app.component.ts",
+      "changed": true
+    },
+    {
+      "file": "src2/app/app.config.ts",
+      "changed": false
+    },
+    {
+      "file": "src2/app/app.routes.ts",
+      "changed": false
+    },
+    {
+      "file": "src2/app/examples/alias-getter/alias-getter.component.ts",
+      "changed": true
+    },
+    {
+      "file": "src2/app/examples/merge-assign/merge-assign.component.ts",
+      "changed": true
+    },
+    {
+      "file": "src2/app/examples/service-di/service-di.component.ts",
+      "changed": true
+    },
+    {
+      "file": "src2/app/i18n/en.ts",
+      "changed": false
+    },
+    {
+      "file": "src2/app/i18n/i18n.pipe.ts",
+      "changed": false
+    },
+    {
+      "file": "src2/app/i18n/index.ts",
+      "changed": false
+    },
+    {
+      "file": "src2/app/i18n/zh.ts",
+      "changed": false
+    },
+    {
+      "file": "src2/main.ts",
+      "changed": false
+    }
+  ]
+}
