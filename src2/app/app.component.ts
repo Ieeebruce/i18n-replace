@@ -14,9 +14,11 @@ import { I18nLocaleService } from './i18n';
 export class AppComponent {
   title = ''
   i18n;
+  local: { app: { title: string; description: string; switchToEn: string; switchToZh: string; }; home: { welcome: string; }; list: { items: string[]; }; templates: { info: string; itemTpl: string; }; user: { greetTpl: string; }; };
   constructor(public locale: I18nLocaleService) {
-    this.i18n = this.locale.getLocale();
-    this.title = this.locale.get('title');
+    this.local = this.locale.getLocale();
+    this.i18n = {...this.locale.get('home'), ...this.locale.get('app')}
+    this.title = this.i18n.title;
   }
 
   switch(lang: 'en' | 'zh') {

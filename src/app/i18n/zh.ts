@@ -6,7 +6,8 @@ export const zh = {
     switchToZh: '切换到中文'
   },
   home: {
-    welcome: '欢迎！'
+    welcome: '欢迎！',
+    title: '首页'
   },
   list: {
     items: ['项目一', '项目二', '项目三']
