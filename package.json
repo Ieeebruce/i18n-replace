@@ -11,7 +11,9 @@
     "i18n:to-json": "node scripts/i18n-to-json.js",
     "i18n:scan": "node scripts/scan-i18n-usage.js",
     "i18n:replace": "node scripts/replace-i18n.js",
-    "i18n:report": "node scripts/report-i18n.js"
+    "i18n:report": "node scripts/report-i18n.js",
+    "build:scripts": "tsc -p scripts/tsconfig.json",
+    "test:ast": "npm run build:scripts && node scripts/dist/utils/ast.spec.js"
   },
   "private": true,
   "dependencies": {

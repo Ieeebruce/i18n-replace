@@ -10,6 +10,14 @@ const fs = require('fs')
 const path = require('path')
 const ts = require('typescript')
 const { readFile, writeFile, walk, extractObject, tsObjectToJSON } = require('./lib/i18n-utils')
+const {
+  findServiceParamName: astFindServiceParamName,
+  findLocaleVarNames: astFindLocaleVarNames,
+  collectVarRootOrder: astCollectVarRootOrder,
+  collectTemplateKeys: astCollectTemplateKeys,
+  resolveKeyFromContext: astResolveKeyFromContext,
+  i18nAstConfig
+} = require('./dist/utils/ast')
 
 // 通用替换工具：在执行正则替换的同时记录变更信息（偏移、前后文本、备注）
 function applyRegexWithLog(s, re, replacer, changes, file, kind, note) {
@@ -31,6 +39,16 @@ function parseArgs() {
     const m = a.match(/^--dir=(.+)$/)
     if (m) srcDirName = m[1]
     else if (!a.startsWith('--')) srcDirName = a
+  }
+  for (const a of args) {
+    const m1 = a.match(/^--serviceTypeName=(.+)$/)
+    if (m1) i18nAstConfig.serviceTypeName = m1[1]
+    const m2 = a.match(/^--getLocaleMethod=(.+)$/)
+    if (m2) i18nAstConfig.getLocaleMethod = m2[1]
+    const m3 = a.match(/^--getMethod=(.+)$/)
+    if (m3) i18nAstConfig.getMethod = m3[1]
+    const m4 = a.match(/^--fallbackServiceParamName=(.+)$/)
+    if (m4) i18nAstConfig.fallbackServiceParamName = m4[1]
   }
   return { srcDirName }
 }
@@ -241,7 +259,7 @@ function replaceTsContent(content, serviceName, varNames, componentDir, srcRootD
         const roots = varRootOrder.get(v) || []
         if (roots.length) key = `${roots[0]}.${pathStr}`
       }
-      if (!key) key = resolveKeyFromContext(pathStr, htmlKeys || [])
+      if (!key) key = astResolveKeyFromContext(pathStr, htmlKeys || [])
       return `this.${serviceName}.get('${key}', { ${params.join(', ')} })`
     }, changes, filePath, 'ts', 'chain-replace-to-service.get')
     // 简单属性访问匹配：无 .replace 链的场景
@@ -253,7 +271,7 @@ function replaceTsContent(content, serviceName, varNames, componentDir, srcRootD
         const roots = varRootOrder.get(v) || []
         if (roots.length) key = `${roots[0]}.${pathStr}`
       }
-      if (!key) key = resolveKeyFromContext(pathStr, htmlKeys || [])
+      if (!key) key = astResolveKeyFromContext(pathStr, htmlKeys || [])
       return `this.${serviceName}.get('${key}')`
     }, changes, filePath, 'ts', 'property-to-service.get')
   }
@@ -290,7 +308,7 @@ function replaceHtmlContent(html, varNames, varRootOrder, htmlKeys) {
         const roots = varRootOrder.get(v) || []
         if (roots.length) key = `${roots[0]}.${pathStr}`
       }
-      if (!key) key = resolveKeyFromContext(pathStr, htmlKeys || [])
+      if (!key) key = astResolveKeyFromContext(pathStr, htmlKeys || [])
       return `{{ '${key}' | i18n: { ${params.join(', ')} } }}`
     })
     const reSimple = new RegExp(`\{\{\s*${v}\.([\\w.]+)\\s*\}\}`, 'g')
@@ -300,7 +318,7 @@ function replaceHtmlContent(html, varNames, varRootOrder, htmlKeys) {
         const roots = varRootOrder.get(v) || []
         if (roots.length) key = `${roots[0]}.${pathStr}`
       }
-      if (!key) key = resolveKeyFromContext(pathStr, htmlKeys || [])
+      if (!key) key = astResolveKeyFromContext(pathStr, htmlKeys || [])
       return `{{ '${key}' | i18n }}`
     })
   }
@@ -313,20 +331,20 @@ function processComponent(tsPath, srcDir) {
   const content = readFile(tsPath)
   if (!/@Component\(/.test(content)) return
   const sf = ts.createSourceFile(tsPath, content, { languageVersion: ts.ScriptTarget.Latest, scriptKind: ts.ScriptKind.TS })
-  const serviceName = findServiceParamName(sf)
-  let varNames = findLocaleVarNames(sf, serviceName)
+  const serviceName = astFindServiceParamName(sf)
+  let varNames = astFindLocaleVarNames(sf, serviceName)
   varNames = varNames.filter(v => v !== serviceName)
   const dir = path.dirname(tsPath)
   const changesTs = []
   const m = content.match(/templateUrl\s*:\s*['"]([^'"]+)['"]/)
   let htmlKeys = []
   let changedTs = content
-  const varRootOrder = collectVarRootOrder(sf, serviceName, varNames)
+  const varRootOrder = astCollectVarRootOrder(sf, serviceName, varNames)
   if (m) {
     const htmlPath = path.join(dir, m[1])
     if (fs.existsSync(htmlPath)) {
       const htmlOld = readFile(htmlPath)
-      htmlKeys = collectTemplateKeys(htmlOld, varNames)
+      htmlKeys = astCollectTemplateKeys(htmlOld, varNames)
     }
   }
   changedTs = replaceTsContent(content, serviceName, varNames, dir, srcDir, changesTs, tsPath, htmlKeys, varRootOrder)
@@ -347,7 +365,7 @@ function processComponent(tsPath, srcDir) {
               const roots = varRootOrder.get(v) || []
               if (roots.length) key = `${roots[0]}.${p1}`
             }
-            if (!key) key = resolveKeyFromContext(p1, htmlKeys || [])
+            if (!key) key = astResolveKeyFromContext(p1, htmlKeys || [])
             return `{{ '${key}' | i18n }}`
           }, changesHtml, htmlPath, 'html', 'fallback template to pipe')
           next = applyRegexWithLog(next, new RegExp(`\{\{\\s*${v}\\.([A-Za-z0-9_.]+)((?:\\.replace\\(\\s*'\\{([^}]+)\\}'\\s*,\\s*[^)]+\\s*\\)\\s*)+)\\s*\}\}`, 'g'), (m, p1, p2) => {
@@ -360,7 +378,7 @@ function processComponent(tsPath, srcDir) {
               const roots = varRootOrder.get(v) || []
               if (roots.length) key = `${roots[0]}.${p1}`
             }
-            if (!key) key = resolveKeyFromContext(p1, htmlKeys || [])
+            if (!key) key = astResolveKeyFromContext(p1, htmlKeys || [])
             return `{{ '${key}' | i18n: { ${params.join(', ')} } }}`
           }, changesHtml, htmlPath, 'html', 'fallback template chain to pipe')
         }
