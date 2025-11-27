@@ -1,6 +1,6 @@
 import { Component } from '@angular/core'
 import { CommonModule } from '@angular/common'
-import { I18nLocaleService } from '../../i18n'
+import { I18nLocaleService, ZH } from '../../i18n'
 
 @Component({
   selector: 'app-merge-assign',
@@ -10,7 +10,7 @@ import { I18nLocaleService } from '../../i18n'
   styleUrl: './merge-assign.component.scss'
 })
 export class MergeAssignComponent {
-  dict;
+  dict: ZH;
   constructor(public locale: I18nLocaleService) {
     this.dict = this.locale.getLocale();
   }

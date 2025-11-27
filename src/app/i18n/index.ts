@@ -1,17 +1,17 @@
 import { Injectable } from '@angular/core';
 import { en } from './en';
 import { zh } from './zh';
-
+export type ZH = typeof zh;
 @Injectable({ providedIn: 'root' })
 export class I18nLocaleService {
   lang: 'zh' | 'en' = 'zh';
-  getLocale() {
+  getLocale(): typeof zh {
     // 从localStorage读取缓存
     const cachedLang = localStorage.getItem('i18n-lang');
     if (cachedLang) {
       this.lang = cachedLang as 'zh' | 'en';
     }
-    return this.lang === 'en' ? en : zh;
+    return this.lang === 'en' ? en as any : zh;
   }
   get(key: string, params?: Record<string, unknown>) {
     const pack = this.getLocale() as any;

@@ -10,8 +10,9 @@ import { I18nLocaleService } from '../../i18n'
   styleUrl: './alias-getter.component.scss'
 })
 export class AliasGetterComponent {
-  L;
+  L = this.locale.getLocale();
+  title: string;
   constructor(public locale: I18nLocaleService) {
-    this.L = this.locale.getLocale();
+    this.title = this.L.home.welcome
   }
 }

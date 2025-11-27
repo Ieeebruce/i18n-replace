@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { I18nLocaleService } from './i18n';
+import { I18nLocaleService, ZH } from './i18n';
 
 @Component({
   selector: 'app-root',
@@ -12,12 +12,12 @@ import { I18nLocaleService } from './i18n';
 })
 export class AppComponent {
   title = ''
-  i18n;
-  local: { app: { title: string; description: string; switchToEn: string; switchToZh: string; }; home: { welcome: string; }; list: { items: string[]; }; templates: { info: string; itemTpl: string; }; user: { greetTpl: string; }; };
+  i18n: ZH;
+  local;
   constructor(public locale: I18nLocaleService) {
     this.local = this.locale.getLocale();
-    this.i18n = {...this.local.home, ...this.local.app}
-    this.title = this.i18n.title;
+    this.i18n = {...this.local}
+    this.title = this.i18n.app.title;
   }
 
   switch(lang: 'en' | 'zh') {

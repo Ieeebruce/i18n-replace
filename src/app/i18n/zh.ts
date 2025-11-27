@@ -19,4 +19,4 @@ export const zh = {
   user: {
     greetTpl: '你好，{name}!'
   }
-}
+} as const

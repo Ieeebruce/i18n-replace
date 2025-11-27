@@ -18,4 +18,4 @@ export const en = {
   user: {
     greetTpl: 'Hi, {name}!'
   }
-}
+} as const

@@ -1,6 +1,6 @@
 import { Component } from '@angular/core'
 import { CommonModule } from '@angular/common'
-import { I18nLocaleService } from '../../i18n'
+import { I18nLocaleService, ZH } from '../../i18n'
 
 @Component({
   selector: 'app-service-di',
@@ -10,9 +10,10 @@ import { I18nLocaleService } from '../../i18n'
   styleUrl: './service-di.component.scss'
 })
 export class ServiceDiComponent {
-  i18n;
+  i18n: ZH['app'];
   constructor(public locale: I18nLocaleService) {
-    this.i18n = this.locale.getLocale();
+    const local = this.locale.getLocale().app
+    this.i18n = local;
   }
 
 }

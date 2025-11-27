@@ -128,7 +128,7 @@ function findLocaleVarNames(sf, serviceName) {
   }
   visit(sf)
   if (out.size === 0) out.add('T')
-  return Array.from(out)
+  return Array.from(out).filter(n => n !== serviceName)
 }
 
 // 收集合并变量的根来源顺序（出现顺序即优先级）
@@ -245,7 +245,7 @@ function replaceTsContent(content, serviceName, varNames, componentDir, srcRootD
       return `this.${serviceName}.get('${key}', { ${params.join(', ')} })`
     }, changes, filePath, 'ts', 'chain-replace-to-service.get')
     // 简单属性访问匹配：无 .replace 链的场景
-    const reSimple = new RegExp(`this\.${v}\.([\w.]+)`, 'g')
+    const reSimple = new RegExp(`this\.${v}\.([\\w.]+)(?!\\()`, 'g')
     s = applyRegexWithLog(s, reSimple, (m, pathStr) => {
       if (v === serviceName) return m
       let key = pathStr.includes('.') ? pathStr : null
@@ -366,10 +366,10 @@ function processComponent(tsPath, srcDir) {
         }
       }
       if (next !== htmlOld) writeFile(htmlPath, next)
-      return { tsChanges: changesTs, htmlChanges: changesHtml, htmlPath }
+      return { tsChanges: changesTs, htmlChanges: changesHtml, htmlPath, meta: { serviceName, varNames } }
     }
   }
-  return { tsChanges: changesTs, htmlChanges: [], htmlPath: null }
+  return { tsChanges: changesTs, htmlChanges: [], htmlPath: null, meta: { serviceName, varNames } }
 }
 
 // 主流程：遍历目标目录下所有 TS 文件，逐个组件处理，并输出变更报告 JSON
@@ -385,12 +385,14 @@ function main() {
     const changed = beforeTs !== afterTs
     const entry = { file: path.relative(process.cwd(), f), changed }
     if (changed) entry.changes = changes.tsChanges
+    if (changes.meta) entry.meta = changes.meta
     results.push(entry)
     if (changes.htmlPath) {
       const relHtml = path.relative(process.cwd(), changes.htmlPath)
       const htmlChanged = changes.htmlChanges && changes.htmlChanges.length > 0
       const htmlEntry = { file: relHtml, changed: htmlChanged }
       if (htmlChanged) htmlEntry.changes = changes.htmlChanges
+      if (changes.meta) htmlEntry.meta = changes.meta
       results.push(htmlEntry)
     }
   }
