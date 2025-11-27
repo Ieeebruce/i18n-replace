@@ -244,13 +244,14 @@ function resolveKeyFromContext(pathStr, htmlKeys) {
 // 并确保 I18nPipe 已导入且加入 @Component.imports
 function replaceTsContent(content, serviceName, varNames, componentDir, srcRootDir, changes, filePath, htmlKeys, varRootOrder) {
   let s = content
-  for (const v of varNames) {
+  const varsToProcess = Array.from(new Set([].concat(varNames, ['i18n'])))
+  for (const v of varsToProcess) {
     if (v === serviceName) continue
     // 链式模板替换匹配：收集所有 .replace('{k}', expr) 参数为对象注入
-    const reChain = new RegExp(`this\.${v}\.([\w.]+)((?:\.replace\(\s*'\{([^}]+)\}'\s*,\s*([^)]+)\s*\)\s*)+)`, 'g')
+    const reChain = new RegExp(`this\\.${v}(?![A-Za-z0-9_])\\.([\\w.]+)((?:\\.replace\\([^)]*\\))+)`, 'g')
     s = applyRegexWithLog(s, reChain, (m, pathStr, chainText) => {
       if (v === serviceName) return m
-      const reOne = /\\.replace\\(\\s*'\\{([^}]+)\\}'\\s*,\\s*([^)]+)\\s*\\)/g
+      const reOne = /\.replace\(\s*["']\{([^}]+)\}["']\s*,\s*([^)]+)\s*\)/g
       const params = []
       let mg
       while ((mg = reOne.exec(chainText))) params.push(`${mg[1]}: ${mg[2]}`)
@@ -260,10 +261,11 @@ function replaceTsContent(content, serviceName, varNames, componentDir, srcRootD
         if (roots.length) key = `${roots[0]}.${pathStr}`
       }
       if (!key) key = astResolveKeyFromContext(pathStr, htmlKeys || [])
-      return `this.${serviceName}.get('${key}', { ${params.join(', ')} })`
+      const target = v === 'i18n' ? `this.${v}` : `this.${serviceName}`
+      return `${target}.get('${key}', { ${params.join(', ')} })`
     }, changes, filePath, 'ts', 'chain-replace-to-service.get')
     // 简单属性访问匹配：无 .replace 链的场景
-    const reSimple = new RegExp(`this\.${v}\.([\\w.]+)(?!\\()`, 'g')
+    const reSimple = new RegExp(`this\.${v}(?![A-Za-z0-9_])\.([\\w.]+)(?!\\()`, 'g')
     s = applyRegexWithLog(s, reSimple, (m, pathStr) => {
       if (v === serviceName) return m
       let key = pathStr.includes('.') ? pathStr : null
@@ -272,12 +274,15 @@ function replaceTsContent(content, serviceName, varNames, componentDir, srcRootD
         if (roots.length) key = `${roots[0]}.${pathStr}`
       }
       if (!key) key = astResolveKeyFromContext(pathStr, htmlKeys || [])
-      return `this.${serviceName}.get('${key}')`
+      const target = v === 'i18n' ? `this.${v}` : `this.${serviceName}`
+      return `${target}.get('${key}')`
     }, changes, filePath, 'ts', 'property-to-service.get')
   }
   // 计算 I18nPipe 的相对导入路径，并确保导入存在
   const relDir = path.relative(componentDir, path.join(srcRootDir, 'app', 'i18n')).replace(/\\/g, '/')
-  const pipeImport = `import { I18nPipe } from '${relDir ? relDir : '.'}/i18n.pipe'`
+  let base = relDir || '.'
+  if (!base.startsWith('.')) base = './' + base
+  const pipeImport = `import { I18nPipe } from '${base}/i18n.pipe'`
   if (!new RegExp(`import\\s*\\{\\s*I18nPipe\\s*\\}`).test(s)) {
     changes.push({ kind: 'ts', file: filePath, offset: 0, before: '', after: pipeImport + '\n', note: 'add I18nPipe import' })
     s = pipeImport + '\n' + s
@@ -299,7 +304,7 @@ function replaceHtmlContent(html, varNames, varRootOrder, htmlKeys) {
     out = out.replace(reChain, (m) => m)
     const reTplChain = new RegExp(`\{\{\s*${v}\.([\\w.]+)((?:\\.replace\\(\\s*'\\{([^}]+)\\}'\\s*,\\s*[^)]+\\s*\\)\\s*)+)\s*\}\}`, 'g')
     out = out.replace(reTplChain, (m, pathStr, chainText) => {
-      const reOne = /\\.replace\\(\\s*'\\{([^}]+)\\}'\\s*,\\s*([^)]+)\\s*\\)/g
+      const reOne = /\.replace\(\s*["']\{([^}]+)\}["']\s*,\s*([^)]+)\s*\)/g
       const params = []
       let mg
       while ((mg = reOne.exec(chainText))) params.push(`${mg[1]}: ${mg[2]}`)
@@ -368,8 +373,8 @@ function processComponent(tsPath, srcDir) {
             if (!key) key = astResolveKeyFromContext(p1, htmlKeys || [])
             return `{{ '${key}' | i18n }}`
           }, changesHtml, htmlPath, 'html', 'fallback template to pipe')
-          next = applyRegexWithLog(next, new RegExp(`\{\{\\s*${v}\\.([A-Za-z0-9_.]+)((?:\\.replace\\(\\s*'\\{([^}]+)\\}'\\s*,\\s*[^)]+\\s*\\)\\s*)+)\\s*\}\}`, 'g'), (m, p1, p2) => {
-            const reOne = /\\.replace\\(\\s*'\\{([^}]+)\\}'\\s*,\\s*([^)]+)\\s*\\)/g
+          next = applyRegexWithLog(next, new RegExp('\\{\\{\\s*' + v + '\\.([A-Za-z0-9_.]+)((?:\\.replace\\([^)]*\\))+)\\s*\\}\\}', 'g'), (m, p1, p2) => {
+            const reOne = /\.replace\(\s*["']\{([^}]+)\}["']\s*,\s*([^)]+)\s*\)/g
             const params = []
             let mg
             while ((mg = reOne.exec(p2))) params.push(`${mg[1]}: ${mg[2]}`)

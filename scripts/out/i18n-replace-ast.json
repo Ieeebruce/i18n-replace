@@ -12,17 +12,9 @@
         {
           "kind": "ts",
           "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/scripts/tmp/src/app/app.component.ts",
-          "offset": 492,
-          "before": "this.locale.getLocal",
-          "after": "this.locale.get('.getLocal')",
-          "note": "property-to-service.get"
-        },
-        {
-          "kind": "ts",
-          "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/scripts/tmp/src/app/app.component.ts",
-          "offset": 626,
-          "before": "this.locale.setLan",
-          "after": "this.locale.get('.setLan')",
+          "offset": 566,
+          "before": "this.i18n.app.title",
+          "after": "this.i18n.get('app.title')",
           "note": "property-to-service.get"
         },
         {
@@ -30,13 +22,13 @@
           "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/scripts/tmp/src/app/app.component.ts",
           "offset": 0,
           "before": "",
-          "after": "import { I18nPipe } from 'i18n/i18n.pipe'\n",
+          "after": "import { I18nPipe } from './i18n/i18n.pipe'\n",
           "note": "add I18nPipe import"
         },
         {
           "kind": "ts",
           "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/scripts/tmp/src/app/app.component.ts",
-          "offset": 230,
+          "offset": 232,
           "before": "@Component({\n  selector: 'app-root',\n  standalone: true,\n  imports: [RouterOutlet, CommonModule],\n  templateUrl: './app.component.html',\n  styleUrl: './app.component.scss'\n})",
           "after": "@Component({\n  selector: 'app-root',\n  standalone: true,\n  imports: [RouterOutlet, CommonModule, I18nPipe],\n  templateUrl: './app.component.html',\n  styleUrl: './app.component.scss'\n})",
           "note": "ensure I18nPipe in @Component imports"
@@ -128,7 +120,7 @@
           "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/scripts/tmp/src/app/examples/alias-getter/alias-getter.component.html",
           "offset": 135,
           "before": "{{ L.templates.info.replace('{name}', '李四').replace('{count}', '2') }}",
-          "after": "{{ 'templates.info' | i18n: {  } }}",
+          "after": "{{ 'templates.info' | i18n: { name: '李四', count: '2' } }}",
           "note": "fallback template chain to pipe"
         }
       ],
@@ -200,7 +192,7 @@
           "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/scripts/tmp/src/app/examples/merge-assign/merge-assign.component.html",
           "offset": 217,
           "before": "{{ dict.templates.info.replace('{name}', '张三').replace('{count}', '5') }}",
-          "after": "{{ 'templates.info' | i18n: {  } }}",
+          "after": "{{ 'templates.info' | i18n: { name: '张三', count: '5' } }}",
           "note": "fallback template chain to pipe"
         }
       ],
