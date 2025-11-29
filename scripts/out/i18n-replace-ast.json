@@ -1,35 +1,27 @@
 {
-  "changed": 6,
+  "changed": 1,
   "results": [
     {
-      "file": "scripts/tmp/src/app/app.component.spec.ts",
+      "file": "src/app/app.component.spec.ts",
       "changed": false
     },
     {
-      "file": "scripts/tmp/src/app/app.component.ts",
+      "file": "src/app/app.component.ts",
       "changed": true,
       "changes": [
         {
           "kind": "ts",
-          "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/scripts/tmp/src/app/app.component.ts",
-          "offset": 566,
-          "before": "this.i18n.app.title",
-          "after": "this.i18n.get('app.title')",
+          "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/src/app/app.component.ts",
+          "offset": 620,
+          "before": "this.i18n.ge",
+          "after": "this.i18n.get('ge')",
           "note": "property-to-service.get"
         },
         {
           "kind": "ts",
-          "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/scripts/tmp/src/app/app.component.ts",
-          "offset": 0,
-          "before": "",
-          "after": "import { I18nPipe } from './i18n/i18n.pipe'\n",
-          "note": "add I18nPipe import"
-        },
-        {
-          "kind": "ts",
-          "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/scripts/tmp/src/app/app.component.ts",
+          "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/src/app/app.component.ts",
           "offset": 232,
-          "before": "@Component({\n  selector: 'app-root',\n  standalone: true,\n  imports: [RouterOutlet, CommonModule],\n  templateUrl: './app.component.html',\n  styleUrl: './app.component.scss'\n})",
+          "before": "@Component({\n  selector: 'app-root',\n  standalone: true,\n  imports: [RouterOutlet, CommonModule, I18nPipe],\n  templateUrl: './app.component.html',\n  styleUrl: './app.component.scss'\n})",
           "after": "@Component({\n  selector: 'app-root',\n  standalone: true,\n  imports: [RouterOutlet, CommonModule, I18nPipe],\n  templateUrl: './app.component.html',\n  styleUrl: './app.component.scss'\n})",
           "note": "ensure I18nPipe in @Component imports"
         }
@@ -42,7 +34,7 @@
       }
     },
     {
-      "file": "scripts/tmp/src/app/app.component.html",
+      "file": "src/app/app.component.html",
       "changed": false,
       "meta": {
         "serviceName": "locale",
@@ -52,42 +44,16 @@
       }
     },
     {
-      "file": "scripts/tmp/src/app/app.config.ts",
+      "file": "src/app/app.config.ts",
       "changed": false
     },
     {
-      "file": "scripts/tmp/src/app/app.routes.ts",
+      "file": "src/app/app.routes.ts",
       "changed": false
     },
     {
-      "file": "scripts/tmp/src/app/examples/alias-getter/alias-getter.component.ts",
-      "changed": true,
-      "changes": [
-        {
-          "kind": "ts",
-          "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/scripts/tmp/src/app/examples/alias-getter/alias-getter.component.ts",
-          "offset": 475,
-          "before": "this.L.home.welcome",
-          "after": "this.locale.get('home.welcome')",
-          "note": "property-to-service.get"
-        },
-        {
-          "kind": "ts",
-          "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/scripts/tmp/src/app/examples/alias-getter/alias-getter.component.ts",
-          "offset": 0,
-          "before": "",
-          "after": "import { I18nPipe } from '../../i18n/i18n.pipe'\n",
-          "note": "add I18nPipe import"
-        },
-        {
-          "kind": "ts",
-          "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/scripts/tmp/src/app/examples/alias-getter/alias-getter.component.ts",
-          "offset": 185,
-          "before": "@Component({\n  selector: 'app-alias-getter',\n  standalone: true,\n  imports: [CommonModule],\n  templateUrl: './alias-getter.component.html',\n  styleUrl: './alias-getter.component.scss'\n})",
-          "after": "@Component({\n  selector: 'app-alias-getter',\n  standalone: true,\n  imports: [CommonModule, I18nPipe],\n  templateUrl: './alias-getter.component.html',\n  styleUrl: './alias-getter.component.scss'\n})",
-          "note": "ensure I18nPipe in @Component imports"
-        }
-      ],
+      "file": "src/app/examples/alias-getter/alias-getter.component.ts",
+      "changed": false,
       "meta": {
         "serviceName": "locale",
         "varNames": [
@@ -96,34 +62,8 @@
       }
     },
     {
-      "file": "scripts/tmp/src/app/examples/alias-getter/alias-getter.component.html",
-      "changed": true,
-      "changes": [
-        {
-          "kind": "html",
-          "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/scripts/tmp/src/app/examples/alias-getter/alias-getter.component.html",
-          "offset": 37,
-          "before": "{{ L.app.title }}",
-          "after": "{{ 'app.title' | i18n }}",
-          "note": "fallback template to pipe"
-        },
-        {
-          "kind": "html",
-          "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/scripts/tmp/src/app/examples/alias-getter/alias-getter.component.html",
-          "offset": 88,
-          "before": "{{ L.app.description }}",
-          "after": "{{ 'app.description' | i18n }}",
-          "note": "fallback template to pipe"
-        },
-        {
-          "kind": "html",
-          "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/scripts/tmp/src/app/examples/alias-getter/alias-getter.component.html",
-          "offset": 135,
-          "before": "{{ L.templates.info.replace('{name}', '李四').replace('{count}', '2') }}",
-          "after": "{{ 'templates.info' | i18n: { name: '李四', count: '2' } }}",
-          "note": "fallback template chain to pipe"
-        }
-      ],
+      "file": "src/app/examples/alias-getter/alias-getter.component.html",
+      "changed": false,
       "meta": {
         "serviceName": "locale",
         "varNames": [
@@ -132,26 +72,8 @@
       }
     },
     {
-      "file": "scripts/tmp/src/app/examples/merge-assign/merge-assign.component.ts",
-      "changed": true,
-      "changes": [
-        {
-          "kind": "ts",
-          "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/scripts/tmp/src/app/examples/merge-assign/merge-assign.component.ts",
-          "offset": 0,
-          "before": "",
-          "after": "import { I18nPipe } from '../../i18n/i18n.pipe'\n",
-          "note": "add I18nPipe import"
-        },
-        {
-          "kind": "ts",
-          "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/scripts/tmp/src/app/examples/merge-assign/merge-assign.component.ts",
-          "offset": 189,
-          "before": "@Component({\n  selector: 'app-merge-assign',\n  standalone: true,\n  imports: [CommonModule],\n  templateUrl: './merge-assign.component.html',\n  styleUrl: './merge-assign.component.scss'\n})",
-          "after": "@Component({\n  selector: 'app-merge-assign',\n  standalone: true,\n  imports: [CommonModule, I18nPipe],\n  templateUrl: './merge-assign.component.html',\n  styleUrl: './merge-assign.component.scss'\n})",
-          "note": "ensure I18nPipe in @Component imports"
-        }
-      ],
+      "file": "src/app/examples/merge-assign/merge-assign.component.ts",
+      "changed": false,
       "meta": {
         "serviceName": "locale",
         "varNames": [
@@ -160,42 +82,8 @@
       }
     },
     {
-      "file": "scripts/tmp/src/app/examples/merge-assign/merge-assign.component.html",
-      "changed": true,
-      "changes": [
-        {
-          "kind": "html",
-          "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/scripts/tmp/src/app/examples/merge-assign/merge-assign.component.html",
-          "offset": 88,
-          "before": "{{ dict.app.title }}",
-          "after": "{{ 'app.title' | i18n }}",
-          "note": "fallback template to pipe"
-        },
-        {
-          "kind": "html",
-          "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/scripts/tmp/src/app/examples/merge-assign/merge-assign.component.html",
-          "offset": 119,
-          "before": "{{ dict.app.description }}",
-          "after": "{{ 'app.description' | i18n }}",
-          "note": "fallback template to pipe"
-        },
-        {
-          "kind": "html",
-          "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/scripts/tmp/src/app/examples/merge-assign/merge-assign.component.html",
-          "offset": 155,
-          "before": "{{ dict.home.welcome }}",
-          "after": "{{ 'home.welcome' | i18n }}",
-          "note": "fallback template to pipe"
-        },
-        {
-          "kind": "html",
-          "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/scripts/tmp/src/app/examples/merge-assign/merge-assign.component.html",
-          "offset": 217,
-          "before": "{{ dict.templates.info.replace('{name}', '张三').replace('{count}', '5') }}",
-          "after": "{{ 'templates.info' | i18n: { name: '张三', count: '5' } }}",
-          "note": "fallback template chain to pipe"
-        }
-      ],
+      "file": "src/app/examples/merge-assign/merge-assign.component.html",
+      "changed": false,
       "meta": {
         "serviceName": "locale",
         "varNames": [
@@ -204,35 +92,7 @@
       }
     },
     {
-      "file": "scripts/tmp/src/app/examples/service-di/service-di.component.ts",
-      "changed": true,
-      "changes": [
-        {
-          "kind": "ts",
-          "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/scripts/tmp/src/app/examples/service-di/service-di.component.ts",
-          "offset": 0,
-          "before": "",
-          "after": "import { I18nPipe } from '../../i18n/i18n.pipe'\n",
-          "note": "add I18nPipe import"
-        },
-        {
-          "kind": "ts",
-          "file": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/scripts/tmp/src/app/examples/service-di/service-di.component.ts",
-          "offset": 189,
-          "before": "@Component({\n  selector: 'app-service-di',\n  standalone: true,\n  imports: [CommonModule],\n  templateUrl: './service-di.component.html',\n  styleUrl: './service-di.component.scss'\n})",
-          "after": "@Component({\n  selector: 'app-service-di',\n  standalone: true,\n  imports: [CommonModule, I18nPipe],\n  templateUrl: './service-di.component.html',\n  styleUrl: './service-di.component.scss'\n})",
-          "note": "ensure I18nPipe in @Component imports"
-        }
-      ],
-      "meta": {
-        "serviceName": "locale",
-        "varNames": [
-          "T"
-        ]
-      }
-    },
-    {
-      "file": "scripts/tmp/src/app/examples/service-di/service-di.component.html",
+      "file": "src/app/examples/service-di/service-di.component.ts",
       "changed": false,
       "meta": {
         "serviceName": "locale",
@@ -242,23 +102,33 @@
       }
     },
     {
-      "file": "scripts/tmp/src/app/i18n/en.ts",
+      "file": "src/app/examples/service-di/service-di.component.html",
+      "changed": false,
+      "meta": {
+        "serviceName": "locale",
+        "varNames": [
+          "T"
+        ]
+      }
+    },
+    {
+      "file": "src/app/i18n/en.ts",
       "changed": false
     },
     {
-      "file": "scripts/tmp/src/app/i18n/i18n.pipe.ts",
+      "file": "src/app/i18n/i18n.pipe.ts",
       "changed": false
     },
     {
-      "file": "scripts/tmp/src/app/i18n/index.ts",
+      "file": "src/app/i18n/index.ts",
       "changed": false
     },
     {
-      "file": "scripts/tmp/src/app/i18n/zh.ts",
+      "file": "src/app/i18n/zh.ts",
       "changed": false
     },
     {
-      "file": "scripts/tmp/src/main.ts",
+      "file": "src/main.ts",
       "changed": false
     }
   ]

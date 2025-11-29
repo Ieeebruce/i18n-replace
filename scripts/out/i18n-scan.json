@@ -1,0 +1,120 @@
+{
+  "files": 12,
+  "items": [
+    {
+      "tsFile": "src/app/app.component.spec.ts",
+      "tsUsages": [],
+      "templateUsages": []
+    },
+    {
+      "tsFile": "src/app/app.component.ts",
+      "tsUsages": [
+        {
+          "filePath": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/src/app/app.component.ts",
+          "rootVar": "local",
+          "keyPath": "",
+          "range": {
+            "start": 533,
+            "end": 543
+          },
+          "loc": {
+            "line": 19,
+            "column": 5
+          }
+        },
+        {
+          "filePath": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/src/app/app.component.ts",
+          "rootVar": "local",
+          "keyPath": "",
+          "range": {
+            "start": 591,
+            "end": 601
+          },
+          "loc": {
+            "line": 20,
+            "column": 21
+          }
+        }
+      ],
+      "templateUsages": []
+    },
+    {
+      "tsFile": "src/app/app.config.ts",
+      "tsUsages": [],
+      "templateUsages": []
+    },
+    {
+      "tsFile": "src/app/app.routes.ts",
+      "tsUsages": [],
+      "templateUsages": []
+    },
+    {
+      "tsFile": "src/app/examples/alias-getter/alias-getter.component.ts",
+      "tsUsages": [],
+      "templateUsages": []
+    },
+    {
+      "tsFile": "src/app/examples/merge-assign/merge-assign.component.ts",
+      "tsUsages": [
+        {
+          "filePath": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/src/app/examples/merge-assign/merge-assign.component.ts",
+          "rootVar": "dict",
+          "keyPath": "",
+          "range": {
+            "start": 488,
+            "end": 497
+          },
+          "loc": {
+            "line": 16,
+            "column": 5
+          }
+        }
+      ],
+      "templateUsages": []
+    },
+    {
+      "tsFile": "src/app/examples/service-di/service-di.component.ts",
+      "tsUsages": [
+        {
+          "filePath": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/src/app/examples/service-di/service-di.component.ts",
+          "rootVar": "local",
+          "keyPath": "app.",
+          "range": {
+            "start": 533,
+            "end": 542
+          },
+          "loc": {
+            "line": 17,
+            "column": 5
+          }
+        }
+      ],
+      "templateUsages": []
+    },
+    {
+      "tsFile": "src/app/i18n/en.ts",
+      "tsUsages": [],
+      "templateUsages": []
+    },
+    {
+      "tsFile": "src/app/i18n/i18n.pipe.ts",
+      "tsUsages": [],
+      "templateUsages": []
+    },
+    {
+      "tsFile": "src/app/i18n/index.ts",
+      "tsUsages": [],
+      "templateUsages": []
+    },
+    {
+      "tsFile": "src/app/i18n/zh.ts",
+      "tsUsages": [],
+      "templateUsages": []
+    },
+    {
+      "tsFile": "src/main.ts",
+      "tsUsages": [],
+      "templateUsages": []
+    }
+  ]
+}

@@ -277,6 +277,22 @@ function replaceTsContent(content, serviceName, varNames, componentDir, srcRootD
       const target = v === 'i18n' ? `this.${v}` : `this.${serviceName}`
       return `${target}.get('${key}')`
     }, changes, filePath, 'ts', 'property-to-service.get')
+
+    // 动态索引访问：this.<var>.<path>[expr]
+    const reIndex = new RegExp(`this\\.${v}(?![A-Za-z0-9_])\\.([\\w.]+)\\s*\\[([^\\]]+)\\]`, 'g')
+    s = applyRegexWithLog(s, reIndex, (m, pathStr, idxExpr) => {
+      if (v === serviceName) return m
+      let base = pathStr.includes('.') ? pathStr : null
+      if (!base) {
+        const roots = varRootOrder.get(v) || []
+        if (roots.length) base = `${roots[0]}.${pathStr}`
+      }
+      if (!base) base = astResolveKeyFromContext(pathStr, htmlKeys || [])
+      const target = v === 'i18n' ? `this.${v}` : `this.${serviceName}`
+      const lit = idxExpr.match(/^\s*['"]([^'\"]+)['"]\s*$/)
+      if (lit) return `${target}.get('${base}.${lit[1]}')`
+      return `${target}.get('${base}.' + ${idxExpr.trim()})`
+    }, changes, filePath, 'ts', 'index-access-to-service.get')
   }
   // 计算 I18nPipe 的相对导入路径，并确保导入存在
   const relDir = path.relative(componentDir, path.join(srcRootDir, 'app', 'i18n')).replace(/\\/g, '/')
@@ -315,6 +331,18 @@ function replaceHtmlContent(html, varNames, varRootOrder, htmlKeys) {
       }
       if (!key) key = astResolveKeyFromContext(pathStr, htmlKeys || [])
       return `{{ '${key}' | i18n: { ${params.join(', ')} } }}`
+    })
+    const reIndex = new RegExp(`\\{\\{\\s*${v}\\.([A-Za-z0-9_.]+)\\s*\\[([^\\]]+)\\]\\s*\\}\\}`, 'g')
+    out = out.replace(reIndex, (m, pathStr, idxExpr) => {
+      let base = pathStr.includes('.') ? pathStr : null
+      if (!base) {
+        const roots = varRootOrder.get(v) || []
+        if (roots.length) base = `${roots[0]}.${pathStr}`
+      }
+      if (!base) base = astResolveKeyFromContext(pathStr, htmlKeys || [])
+      const lit = idxExpr.match(/^\s*['"]([^'\"]+)['"]\s*$/)
+      if (lit) return `{{ '${base}.${lit[1]}' | i18n }}`
+      return `{{ ('${base}.' + ${idxExpr.trim()}) | i18n }}`
     })
     const reSimple = new RegExp(`\{\{\s*${v}\.([\\w.]+)\\s*\}\}`, 'g')
     out = out.replace(reSimple, (m, pathStr) => {
@@ -386,6 +414,17 @@ function processComponent(tsPath, srcDir) {
             if (!key) key = astResolveKeyFromContext(p1, htmlKeys || [])
             return `{{ '${key}' | i18n: { ${params.join(', ')} } }}`
           }, changesHtml, htmlPath, 'html', 'fallback template chain to pipe')
+          next = applyRegexWithLog(next, new RegExp('\\{\\{\\s*' + v + '\\.([A-Za-z0-9_.]+)\\s*\\[([^\\]]+)\\]\\s*\\}\\}', 'g'), (m, p1, idxExpr) => {
+            let base = p1.includes('.') ? p1 : null
+            if (!base) {
+              const roots = varRootOrder.get(v) || []
+              if (roots.length) base = `${roots[0]}.${p1}`
+            }
+            if (!base) base = astResolveKeyFromContext(p1, htmlKeys || [])
+            const lit = idxExpr.match(/^\s*['"]([^'\"]+)['"]\s*$/)
+            if (lit) return `{{ '${base}.${lit[1]}' | i18n }}`
+            return `{{ ('${base}.' + ${idxExpr.trim()}) | i18n }}`
+          }, changesHtml, htmlPath, 'html', 'fallback template index to pipe')
         }
       }
       if (next !== htmlOld) writeFile(htmlPath, next)

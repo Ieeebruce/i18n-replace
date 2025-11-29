@@ -9,6 +9,10 @@ import {
   flatten,
   resolveKey,
   i18nAstConfig,
+  collectVarRefsRecursive,
+  collectVarRefUsages,
+  collectAngularTemplateUsages,
+  collectI18nUsageReport,
 } from './ast';
 
 function test(name: string, fn: () => void) {
@@ -53,7 +57,7 @@ test('findServiceParamName fallback', () => {
   const code = `class C { constructor(private http: HttpClient) {} }`;
   const sf = createSourceFile('c2.ts', code);
   const name = findServiceParamName(sf);
-  assert.equal(name, 'locale');
+  assert.equal(name, i18nAstConfig.fallbackServiceParamName);
 });
 
 test('findLocaleVarNames from property initializer getLocale', () => {
@@ -156,4 +160,159 @@ test('configurable serviceTypeName and getLocaleMethod', () => {
     i18nAstConfig.getLocaleMethod = prev.getLocaleMethod;
     i18nAstConfig.getMethod = prev.getMethod;
   }
+});
+
+test('collectTemplateKeys alias L with replace chain', () => {
+  const html = `{{ L.app.title }} {{ L.templates.info.replace('{name}', '张三').replace('{count}', '3') }} {{ L.user.greetTpl.replace('{name}', '李四') }}`;
+  const keys = collectTemplateKeys(html, ['L']);
+  assert.ok(keys.includes('app.title'));
+  assert.ok(keys.includes('templates.info.replace'));
+  assert.ok(keys.includes('user.greetTpl.replace'));
+});
+
+test('collectTemplateKeys i18n variable with list and template', () => {
+  const html = `{{ i18n.app.title }} {{ i18n.app.description }} {{ i18n.home.welcome }} {{ i18n.templates.itemTpl.replace('{index}', i).replace('{value}', it) }} {{ i18n.list.items }}`;
+  const keys = collectTemplateKeys(html, ['i18n']);
+  assert.ok(keys.includes('app.title'));
+  assert.ok(keys.includes('app.description'));
+  assert.ok(keys.includes('home.welcome'));
+  assert.ok(keys.includes('templates.itemTpl.replace'));
+  assert.ok(keys.includes('list.items'));
+});
+
+test('findLocaleVarNames detects dict assigned in constructor', () => {
+  const code = `class C { dict: any; constructor(private locale: I18nLocaleService) { this.dict = this.locale.getLocale(); } }`;
+  const sf = createSourceFile('c8.ts', code);
+  const vars = findLocaleVarNames(sf, 'locale');
+  assert.ok(vars.includes('dict'));
+});
+
+test('collectVarRootOrder for constructor spreads with service and var', () => {
+  const code = `class C { t = this.locale.getLocale(); m: any; constructor(private locale: I18nLocaleService) { this.m = { ...this.locale.get('home'), ...this.t.app, ...this.locale.get('app') } } }`;
+  const sf = createSourceFile('c9.ts', code);
+  const vars = findLocaleVarNames(sf, 'locale');
+  const order = collectVarRootOrder(sf, 'locale', vars);
+  const roots = order.get('m') || [];
+  assert.deepEqual(roots, ['home', 'app', 'app']);
+});
+
+test('resolveKeyFromContext with single candidate prefers app', () => {
+  const k = resolveKeyFromContext('switchToZh', ['app.switchToZh']);
+  assert.equal(k, 'app.switchToZh');
+});
+
+test('flatten handles arrays', () => {
+  const obj = { list: { items: ['项目一', '项目二'] } };
+  const f = flatten(obj);
+  assert.equal(f['list.items.0'], '项目一');
+  assert.equal(f['list.items.1'], '项目二');
+});
+
+test('resolveKey typical entries', () => {
+  const pack = new Set([
+    'app.title',
+    'app.description',
+    'home.welcome',
+    'templates.info',
+    'templates.itemTpl',
+    'user.greetTpl',
+    'list.items'
+  ]);
+  assert.equal(resolveKey('title', pack), 'app.title');
+  assert.equal(resolveKey('description', pack), 'app.description');
+  assert.equal(resolveKey('welcome', pack), 'home.welcome');
+  assert.equal(resolveKey('info', pack), 'templates.info');
+  assert.equal(resolveKey('greetTpl', pack), 'user.greetTpl');
+});
+
+test('collectVarRefUsages positions and paths', () => {
+  const code = `class C { t = this.locale.getLocale(); constructor(private locale: I18nLocaleService) { const x = this.t.app.title } }`;
+  const sf = createSourceFile('r5.ts', code);
+  const vars = findLocaleVarNames(sf, 'locale');
+  const usages = collectVarRefUsages(sf, 'r5.ts', 'locale', vars);
+  const paths = usages.map(u => u.keyPath);
+  assert.ok(paths.includes('app.title'));
+  assert.ok(usages[0].range.start > 0);
+});
+
+test('collectVarRefUsages dynamic element access', () => {
+  const code = `class C { t = this.locale.getLocale(); constructor(private locale: I18nLocaleService) { const x = this.t.app[key] } }`;
+  const sf = createSourceFile('r6.ts', code);
+  const vars = findLocaleVarNames(sf, 'locale');
+  const usages = collectVarRefUsages(sf, 'r6.ts', 'locale', vars);
+  const u = usages.find(u => u.rootVar === 't');
+  assert.ok(u);
+  assert.equal(u.keyPath, 'app');
+  assert.ok(u.dynamicSegments && u.dynamicSegments.includes('key'));
+});
+
+test('collectVarRefUsages element literal becomes static path', () => {
+  const code = `class C { t = this.locale.getLocale(); constructor(private locale: I18nLocaleService) { const x = this.t.app['title'] } }`;
+  const sf = createSourceFile('r7.ts', code);
+  const vars = findLocaleVarNames(sf, 'locale');
+  const usages = collectVarRefUsages(sf, 'r7.ts', 'locale', vars);
+  const paths = usages.map(u => u.keyPath);
+  assert.ok(paths.includes('app.title'));
+});
+
+test('collectAngularTemplateUsages inline template simple', () => {
+  const code = `@Component({ template: "{{ i18n.app.title }}" }) export class C { i18n = this.locale.getLocale(); constructor(public locale: I18nLocaleService) {} }`;
+  const sf = createSourceFile('cmp.ts', code);
+  const tUsages = collectAngularTemplateUsages(sf, 'cmp.ts', ['i18n']);
+  assert.ok(tUsages.some(u => u.keyPath === 'app.title'));
+});
+
+test('collectAngularTemplateUsages inline template dynamic index', () => {
+  const code = `@Component({ template: "{{ i18n.app[key] }}" }) export class C { i18n = this.locale.getLocale(); key = 'title'; constructor(public locale: I18nLocaleService) {} }`;
+  const sf = createSourceFile('cmp3.ts', code);
+  const tUsages = collectAngularTemplateUsages(sf, 'cmp3.ts', ['i18n']);
+  const u = tUsages.find(u => u.varName === 'i18n');
+  assert.ok(u);
+  assert.equal(u.keyPath, 'app');
+  assert.ok(u.dynamicSegments && u.dynamicSegments.includes('key'));
+});
+
+test('collectI18nUsageReport aggregates ts and templates', () => {
+  const code = `@Component({ template: "{{ dict.home.welcome }}" }) export class C { dict: any; constructor(private locale: I18nLocaleService){ this.dict = this.locale.getLocale(); const z = this.dict.app.title } }`;
+  const sf = createSourceFile('cmp2.ts', code);
+  const report = collectI18nUsageReport(sf, 'cmp2.ts');
+  assert.ok(report.tsUsages.some(u => u.keyPath === 'app.title'));
+  assert.ok(report.templateUsages.some(u => u.keyPath === 'home.welcome'));
+});
+
+test('collectVarRefsRecursive simple root var chain', () => {
+  const code = `class C { t = this.locale.getLocale(); constructor(private locale: I18nLocaleService) { const a = this.t.app; const b = a.title; const x = this.t.app.title; } }`;
+  const sf = createSourceFile('r1.ts', code);
+  const vars = findLocaleVarNames(sf, 'locale');
+  const refs = collectVarRefsRecursive(sf, 'locale', vars);
+  const set = Array.from(refs.get('t') || []).sort();
+  assert.ok(set.includes('app'));
+  assert.ok(set.includes('app.title'));
+});
+
+test('collectVarRefsRecursive constructor alias chain', () => {
+  const code = `class C { i18n: any; constructor(private locale: I18nLocaleService) { const local = this.locale.getLocale().app; this.i18n = local; const t = this.i18n.title; } }`;
+  const sf = createSourceFile('r2.ts', code);
+  const vars = findLocaleVarNames(sf, 'locale');
+  const refs = collectVarRefsRecursive(sf, 'locale', vars.concat(['i18n']));
+  const set = Array.from(refs.get('i18n') || []).sort();
+  assert.ok(set.includes('app.title'));
+});
+
+test('collectVarRefsRecursive spreads', () => {
+  const code = `class C { t = this.locale.getLocale(); m = { ...this.t.app }; constructor(private locale: I18nLocaleService) { } }`;
+  const sf = createSourceFile('r3.ts', code);
+  const vars = findLocaleVarNames(sf, 'locale');
+  const refs = collectVarRefsRecursive(sf, 'locale', vars);
+  const set = Array.from(refs.get('t') || []).sort();
+  assert.ok(set.includes('app'));
+});
+
+test('collectVarRefsRecursive dict and template', () => {
+  const code = `class C { dict: any; constructor(private locale: I18nLocaleService) { this.dict = this.locale.getLocale(); const s = this.dict.templates.info; } }`;
+  const sf = createSourceFile('r4.ts', code);
+  const vars = findLocaleVarNames(sf, 'locale');
+  const refs = collectVarRefsRecursive(sf, 'locale', vars);
+  const set = Array.from(refs.get('dict') || []).sort();
+  assert.ok(set.includes('templates.info'));
 });
