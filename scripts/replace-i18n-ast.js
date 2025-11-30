@@ -9,6 +9,7 @@
 const fs = require('fs')
 const path = require('path')
 const ts = require('typescript')
+const { createSourceFile } = require('./dist/utils/ast')
 const { readFile, writeFile, walk, extractObject, tsObjectToJSON } = require('./lib/i18n-utils')
 const {
   findServiceParamName: astFindServiceParamName,
@@ -261,11 +262,11 @@ function replaceTsContent(content, serviceName, varNames, componentDir, srcRootD
         if (roots.length) key = `${roots[0]}.${pathStr}`
       }
       if (!key) key = astResolveKeyFromContext(pathStr, htmlKeys || [])
-      const target = v === 'i18n' ? `this.${v}` : `this.${serviceName}`
+      const target = `this.${serviceName}`
       return `${target}.get('${key}', { ${params.join(', ')} })`
     }, changes, filePath, 'ts', 'chain-replace-to-service.get')
     // 简单属性访问匹配：无 .replace 链的场景
-    const reSimple = new RegExp(`this\.${v}(?![A-Za-z0-9_])\.([\\w.]+)(?!\\()`, 'g')
+    const reSimple = new RegExp(`this\\.${v}(?![A-Za-z0-9_])\\.([\\w]+(?:\\.[\\w]+)+)(?!\\()`, 'g')
     s = applyRegexWithLog(s, reSimple, (m, pathStr) => {
       if (v === serviceName) return m
       let key = pathStr.includes('.') ? pathStr : null
@@ -274,7 +275,7 @@ function replaceTsContent(content, serviceName, varNames, componentDir, srcRootD
         if (roots.length) key = `${roots[0]}.${pathStr}`
       }
       if (!key) key = astResolveKeyFromContext(pathStr, htmlKeys || [])
-      const target = v === 'i18n' ? `this.${v}` : `this.${serviceName}`
+      const target = `this.${serviceName}`
       return `${target}.get('${key}')`
     }, changes, filePath, 'ts', 'property-to-service.get')
 
@@ -288,26 +289,96 @@ function replaceTsContent(content, serviceName, varNames, componentDir, srcRootD
         if (roots.length) base = `${roots[0]}.${pathStr}`
       }
       if (!base) base = astResolveKeyFromContext(pathStr, htmlKeys || [])
-      const target = v === 'i18n' ? `this.${v}` : `this.${serviceName}`
+      const target = `this.${serviceName}`
       const lit = idxExpr.match(/^\s*['"]([^'\"]+)['"]\s*$/)
       if (lit) return `${target}.get('${base}.${lit[1]}')`
       return `${target}.get('${base}.' + ${idxExpr.trim()})`
     }, changes, filePath, 'ts', 'index-access-to-service.get')
+
+    // 将别名上的 get 调用统一到服务
+    const reAliasGet = new RegExp(`this\\.${v}(?![A-Za-z0-9_])\\.get\\(([^)]*)\\)`, 'g')
+    s = applyRegexWithLog(s, reAliasGet, (m, args) => {
+      if (v === serviceName) return m
+      return `this.${serviceName}.get(${args})`
+    }, changes, filePath, 'ts', 'alias-get-to-service.get')
   }
-  // 计算 I18nPipe 的相对导入路径，并确保导入存在
-  const relDir = path.relative(componentDir, path.join(srcRootDir, 'app', 'i18n')).replace(/\\/g, '/')
-  let base = relDir || '.'
-  if (!base.startsWith('.')) base = './' + base
-  const pipeImport = `import { I18nPipe } from '${base}/i18n.pipe'`
-  if (!new RegExp(`import\\s*\\{\\s*I18nPipe\\s*\\}`).test(s)) {
-    changes.push({ kind: 'ts', file: filePath, offset: 0, before: '', after: pipeImport + '\n', note: 'add I18nPipe import' })
-    s = pipeImport + '\n' + s
+  // 清理因部分匹配导致的残留：将 get(x)t('key') 合并为 get('key')
+  s = applyRegexWithLog(s, new RegExp(`this\\.${serviceName}\\.get\\(([^)]*)\\)\\s*t\\(\\s*(["'][^"']+["'])\\s*\\)`, 'g'), (m, _a, b) => `this.${serviceName}.get(${b})`, changes, filePath, 'ts', 'cleanup partial get + t')
+  const typeName = i18nAstConfig.serviceTypeName || 'I18nLocaleService'
+  s = applyRegexWithLog(s, new RegExp(`\\b(private|protected)\\s+${serviceName}\\s*:\\s*${typeName}\\b`, 'g'), () => `public ${serviceName}: ${typeName}` , changes, filePath, 'ts', 'service param to public')
+  return s
+}
+
+function removeUnusedLocaleVars(content, serviceName, varNames, filePath, changes) {
+  const sf = createSourceFile(filePath, content)
+  const used = new Set()
+  const decls = []
+  const assigns = []
+  function isGetLocaleCallExpr(expr) {
+    if (!expr || !ts.isCallExpression(expr)) return false
+    const ex = expr.expression
+    return ts.isPropertyAccessExpression(ex) && ex.name.getText(sf) === 'getLocale' && ts.isPropertyAccessExpression(ex.expression) && ex.expression.expression && ex.expression.expression.kind === ts.SyntaxKind.ThisKeyword && ex.expression.name.getText(sf) === serviceName
   }
-  s = applyRegexWithLog(s, /@Component\(\{([\s\S]*?)\}\)/m, (m, obj) => {
-    if (/imports\s*:\s*\[[^\]]*I18nPipe/.test(obj)) return m
-    if (/imports\s*:\s*\[[^\]]*\]/.test(obj)) return m.replace(/imports\s*:\s*\[([^\]]*)\]/, (mm, arr) => `imports: [${arr}, I18nPipe]`)
-    return m.replace(/\{/, '{ imports: [I18nPipe],')
-  }, changes, filePath, 'ts', 'ensure I18nPipe in @Component imports')
+  function isLocaleMerge(expr) {
+    if (!expr || !ts.isObjectLiteralExpression(expr)) return false
+    const spreads = expr.properties.filter(p => ts.isSpreadAssignment(p))
+    return spreads.some(sp => {
+      const e = sp.expression
+      if (ts.isPropertyAccessExpression(e) && e.expression && e.expression.kind === ts.SyntaxKind.ThisKeyword && ts.isIdentifier(e.name) && varNames.includes(e.name.getText(sf))) return true
+      if (ts.isCallExpression(e)) return isGetLocaleCallExpr(e)
+      return false
+    })
+  }
+  function visit(node) {
+    if (ts.isPropertyAccessExpression(node) && node.expression && node.expression.kind === ts.SyntaxKind.ThisKeyword && ts.isIdentifier(node.name)) {
+      const nm = node.name.getText(sf)
+      const p = node.parent
+      const isAssignLHS = p && ts.isBinaryExpression(p) && p.left === node && p.operatorToken && p.operatorToken.kind === ts.SyntaxKind.EqualsToken
+      if (varNames.includes(nm) && !isAssignLHS) used.add(nm)
+    }
+    if (ts.isElementAccessExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.expression && node.expression.expression.kind === ts.SyntaxKind.ThisKeyword && ts.isIdentifier(node.expression.name)) {
+      const nm = node.expression.name.getText(sf)
+      if (varNames.includes(nm)) used.add(nm)
+    }
+    if (ts.isPropertyDeclaration(node) && ts.isIdentifier(node.name) && varNames.includes(node.name.getText(sf))) {
+      decls.push({ start: node.getStart(sf), end: node.getEnd() })
+    }
+    if (ts.isExpressionStatement(node) && ts.isBinaryExpression(node.expression)) {
+      const be = node.expression
+      if (be.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isPropertyAccessExpression(be.left) && be.left.expression && be.left.expression.kind === ts.SyntaxKind.ThisKeyword && ts.isIdentifier(be.left.name) && varNames.includes(be.left.name.getText(sf)) && isGetLocaleCallExpr(be.right)) {
+        assigns.push({ start: node.getStart(sf), end: node.getEnd() })
+      }
+      if (be.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isPropertyAccessExpression(be.left) && be.left.expression && be.left.expression.kind === ts.SyntaxKind.ThisKeyword && ts.isIdentifier(be.left.name) && varNames.includes(be.left.name.getText(sf)) && isLocaleMerge(be.right)) {
+        assigns.push({ start: node.getStart(sf), end: node.getEnd() })
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sf)
+  const unused = varNames.filter(v => !used.has(v))
+  if (unused.length === 0) return content
+  const ranges = []
+  for (const r of decls) ranges.push(r)
+  for (const r of assigns) ranges.push(r)
+  // 若 AST 未能命中具体片段，仍继续执行后续的规则性清理
+  ranges.sort((a, b) => b.start - a.start)
+  let s = content
+  for (const r of ranges) {
+    const before = s.slice(r.start, r.end)
+    changes.push({ kind: 'ts', file: filePath, offset: r.start, before, after: '', note: 'remove unused locale var' })
+    s = s.slice(0, r.start) + s.slice(r.end)
+  }
+  // 额外回退：若仍存在未过滤的声明或赋值，进行规则性清理
+  for (const v of unused) {
+    const hasUsage = new RegExp(`this\\.${v}(?![A-Za-z0-9_])\\.|this\\.${v}\\s*\\[`).test(s)
+    if (hasUsage) continue
+    const rePropTyped = new RegExp(`(^|\n)\s*${v}\s*:\s*[^;]+;\s*`, 'm')
+    const rePropBare = new RegExp(`(^|\n)\s*${v}\s*;\s*`, 'm')
+    const reAssignAny = new RegExp(`(^|\n)\s*this\.${v}\s*=\s*[^;]+;\s*`, 'm')
+    s = s.replace(rePropTyped, (m) => { changes.push({ kind: 'ts', file: filePath, offset: s.indexOf(m), before: m, after: '', note: 'remove unused locale var (typed)' }); return '' })
+    s = s.replace(rePropBare, (m) => { changes.push({ kind: 'ts', file: filePath, offset: s.indexOf(m), before: m, after: '', note: 'remove unused locale var (bare)' }); return '' })
+    s = s.replace(reAssignAny, (m) => { changes.push({ kind: 'ts', file: filePath, offset: s.indexOf(m), before: m, after: '', note: 'remove unused locale var (assign)' }); return '' })
+  }
   return s
 }
 
@@ -358,6 +429,51 @@ function replaceHtmlContent(html, varNames, varRootOrder, htmlKeys) {
   return out
 }
 
+function replaceHtmlContentUsingService(html, serviceName, varNames, varRootOrder, htmlKeys) {
+  let out = html
+  for (const v of varNames) {
+    const reChain = new RegExp(`\\{\\{\\s*${v}\\.([\\u0000-\\uFFFF]*?)\\}\\}`, 'g')
+    out = out.replace(reChain, (m) => m)
+    const reTplChain = new RegExp(`\\{\\{\\s*${v}\\.([\\w.]+)((?:\\.replace\\(\\s*'\\{([^}]+)\\}'\\s*,\\s*[^)]+\\s*\\)\\s*)+)\\s*\\}\\}`, 'g')
+    out = out.replace(reTplChain, (m, pathStr, chainText) => {
+      const reOne = /\\.replace\\(\\s*[\"']\\{([^}]+)\\}[\"']\\s*,\\s*([^)]+)\\s*\\)/g
+      const params = []
+      let mg
+      while ((mg = reOne.exec(chainText))) params.push(`${mg[1]}: ${mg[2]}`)
+      let key = pathStr.includes('.') ? pathStr : null
+      if (!key) {
+        const roots = varRootOrder.get(v) || []
+        if (roots.length) key = `${roots[0]}.${pathStr}`
+      }
+      if (!key) key = astResolveKeyFromContext(pathStr, htmlKeys || [])
+      return `{{ ${serviceName}.get('${key}', { ${params.join(', ')} }) }}`
+    })
+    const reIndex = new RegExp(`\\{\\{\\s*${v}\\.([A-Za-z0-9_.]+)\\s*\\[([^\\]]+)\\]\\s*\\}\\}`, 'g')
+    out = out.replace(reIndex, (m, pathStr, idxExpr) => {
+      let base = pathStr.includes('.') ? pathStr : null
+      if (!base) {
+        const roots = varRootOrder.get(v) || []
+        if (roots.length) base = `${roots[0]}.${pathStr}`
+      }
+      if (!base) base = astResolveKeyFromContext(pathStr, htmlKeys || [])
+      const lit = idxExpr.match(/^\\s*['\"]([^'\"]+)['\"]\\s*$/)
+      if (lit) return `{{ ${serviceName}.get('${base}.${lit[1]}') }}`
+      return `{{ ${serviceName}.get('${base}.' + ${idxExpr.trim()}) }}`
+    })
+    const reSimple = new RegExp(`\\{\\{\\s*${v}\\.([\\w.]+)\\s*\\}\\}`, 'g')
+    out = out.replace(reSimple, (m, pathStr) => {
+      let key = pathStr.includes('.') ? pathStr : null
+      if (!key) {
+        const roots = varRootOrder.get(v) || []
+        if (roots.length) key = `${roots[0]}.${pathStr}`
+      }
+      if (!key) key = astResolveKeyFromContext(pathStr, htmlKeys || [])
+      return `{{ ${serviceName}.get('${key}') }}`
+    })
+  }
+  return out
+}
+
 // 处理单个组件：解析 TS → 识别服务名/变量/根顺序 → 替换 TS → 替换模板
 // 同时记录所有替换项，便于输出报告
 function processComponent(tsPath, srcDir) {
@@ -381,12 +497,19 @@ function processComponent(tsPath, srcDir) {
     }
   }
   changedTs = replaceTsContent(content, serviceName, varNames, dir, srcDir, changesTs, tsPath, htmlKeys, varRootOrder)
+  let changedTs2 = removeUnusedLocaleVars(changedTs, serviceName, Array.from(new Set(varNames.concat(['i18n']))), tsPath, changesTs)
+  if (changedTs2 !== changedTs) {
+    changedTs = changedTs2
+    const changedTs3 = removeUnusedLocaleVars(changedTs, serviceName, Array.from(new Set(varNames.concat(['i18n']))), tsPath, changesTs)
+    if (changedTs3 !== changedTs) changedTs = changedTs3
+  }
   if (changedTs !== content) writeFile(tsPath, changedTs)
   if (m) {
     const htmlPath = path.join(dir, m[1])
     if (fs.existsSync(htmlPath)) {
       const htmlOld = readFile(htmlPath)
       const roots = new Set(varNames)
+      roots.add('i18n')
       const htmlNew = replaceHtmlContent(htmlOld, Array.from(roots), varRootOrder, htmlKeys)
       let next = htmlNew
       const changesHtml = []

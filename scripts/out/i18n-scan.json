@@ -14,11 +14,11 @@
           "rootVar": "local",
           "keyPath": "",
           "range": {
-            "start": 533,
-            "end": 543
+            "start": 479,
+            "end": 489
           },
           "loc": {
-            "line": 19,
+            "line": 18,
             "column": 5
           }
         },
@@ -27,11 +27,11 @@
           "rootVar": "local",
           "keyPath": "",
           "range": {
-            "start": 591,
-            "end": 601
+            "start": 537,
+            "end": 547
           },
           "loc": {
-            "line": 20,
+            "line": 19,
             "column": 21
           }
         }
@@ -50,8 +50,108 @@
     },
     {
       "tsFile": "src/app/examples/alias-getter/alias-getter.component.ts",
-      "tsUsages": [],
-      "templateUsages": []
+      "tsUsages": [
+        {
+          "filePath": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/src/app/examples/alias-getter/alias-getter.component.ts",
+          "rootVar": "L",
+          "keyPath": "home.welcome.",
+          "range": {
+            "start": 462,
+            "end": 472
+          },
+          "loc": {
+            "line": 16,
+            "column": 5
+          }
+        },
+        {
+          "filePath": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/src/app/examples/alias-getter/alias-getter.component.ts",
+          "rootVar": "L",
+          "keyPath": "home.welcome",
+          "range": {
+            "start": 475,
+            "end": 494
+          },
+          "loc": {
+            "line": 16,
+            "column": 18
+          }
+        },
+        {
+          "filePath": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/src/app/examples/alias-getter/alias-getter.component.ts",
+          "rootVar": "L",
+          "keyPath": "home",
+          "range": {
+            "start": 475,
+            "end": 486
+          },
+          "loc": {
+            "line": 16,
+            "column": 18
+          }
+        },
+        {
+          "filePath": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/src/app/examples/alias-getter/alias-getter.component.ts",
+          "rootVar": "L",
+          "keyPath": "",
+          "range": {
+            "start": 475,
+            "end": 481
+          },
+          "loc": {
+            "line": 16,
+            "column": 18
+          }
+        }
+      ],
+      "templateUsages": [
+        {
+          "filePath": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/src/app/examples/alias-getter/alias-getter.component.html",
+          "type": "external",
+          "varName": "L",
+          "keyPath": "app.title",
+          "range": {
+            "start": 40,
+            "end": 51
+          },
+          "loc": {
+            "line": 2,
+            "column": 10
+          }
+        },
+        {
+          "filePath": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/src/app/examples/alias-getter/alias-getter.component.html",
+          "type": "external",
+          "varName": "L",
+          "keyPath": "app.description",
+          "range": {
+            "start": 91,
+            "end": 108
+          },
+          "loc": {
+            "line": 4,
+            "column": 9
+          }
+        },
+        {
+          "filePath": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/src/app/examples/alias-getter/alias-getter.component.html",
+          "type": "external",
+          "varName": "L",
+          "keyPath": "templates.info",
+          "params": {
+            "name": "'李四'",
+            "count": "'2'"
+          },
+          "range": {
+            "start": 124,
+            "end": 140
+          },
+          "loc": {
+            "line": 5,
+            "column": 9
+          }
+        }
+      ]
     },
     {
       "tsFile": "src/app/examples/merge-assign/merge-assign.component.ts",
@@ -61,16 +161,77 @@
           "rootVar": "dict",
           "keyPath": "",
           "range": {
-            "start": 488,
-            "end": 497
+            "start": 430,
+            "end": 439
           },
           "loc": {
-            "line": 16,
+            "line": 15,
             "column": 5
           }
         }
       ],
-      "templateUsages": []
+      "templateUsages": [
+        {
+          "filePath": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/src/app/examples/merge-assign/merge-assign.component.html",
+          "type": "external",
+          "varName": "dict",
+          "keyPath": "app.title",
+          "range": {
+            "start": 91,
+            "end": 105
+          },
+          "loc": {
+            "line": 5,
+            "column": 10
+          }
+        },
+        {
+          "filePath": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/src/app/examples/merge-assign/merge-assign.component.html",
+          "type": "external",
+          "varName": "dict",
+          "keyPath": "app.description",
+          "range": {
+            "start": 122,
+            "end": 142
+          },
+          "loc": {
+            "line": 6,
+            "column": 9
+          }
+        },
+        {
+          "filePath": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/src/app/examples/merge-assign/merge-assign.component.html",
+          "type": "external",
+          "varName": "dict",
+          "keyPath": "home.welcome",
+          "range": {
+            "start": 158,
+            "end": 175
+          },
+          "loc": {
+            "line": 7,
+            "column": 9
+          }
+        },
+        {
+          "filePath": "/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/src/app/examples/merge-assign/merge-assign.component.html",
+          "type": "external",
+          "varName": "dict",
+          "keyPath": "templates.info",
+          "params": {
+            "name": "'张三'",
+            "count": "'5'"
+          },
+          "range": {
+            "start": 208,
+            "end": 227
+          },
+          "loc": {
+            "line": 10,
+            "column": 9
+          }
+        }
+      ]
     },
     {
       "tsFile": "src/app/examples/service-di/service-di.component.ts",
@@ -80,11 +241,11 @@
           "rootVar": "local",
           "keyPath": "app.",
           "range": {
-            "start": 533,
-            "end": 542
+            "start": 475,
+            "end": 484
           },
           "loc": {
-            "line": 17,
+            "line": 16,
             "column": 5
           }
         }
