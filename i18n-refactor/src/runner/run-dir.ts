@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 import * as fs from 'fs'
 import * as path from 'path'
+import ts from 'typescript'
 import { extractReplaceParams } from '../core/params-extractor'
 import { pruneUnused } from '../replace/prune'
+import { collectVarAliases } from '../core/var-alias'
+import { renderTsGet } from '../replace/ts-replace'
 
 function readFile(p: string): string { return fs.readFileSync(p, 'utf8') }
 function writeFile(p: string, s: string) { fs.writeFileSync(p, s, 'utf8') }
@@ -17,24 +20,28 @@ function walk(dir: string, filter: (p: string) => boolean): string[] {
   return out
 }
 
-function replaceHtmlContent(src: string): string {
+function replaceHtmlContent(src: string, varNames: string[]): string {
   let s = src
   // 链式模板替换：{{ var.key.replace('{a}', x).replace('{b}', y) }} → {{ 'key' | i18n: {a:x,b:y} }}
-  s = s.replace(/\{\{\s*([A-Za-z_]\w*)\.([A-Za-z0-9_.]+)((?:\.replace\([^)]*\))+)[^}]*\}\}/g, (_m, _var, key, chain) => {
+  s = s.replace(/\{\{\s*([A-Za-z_]\w*)\.([A-Za-z0-9_.]+)((?:\.replace\([^)]*\))+)[^}]*\}\}/g, (_m, v, key, chain) => {
+    if (!varNames.includes(String(v))) return _m
     const params = extractReplaceParams(chain)
     const p = Object.keys(params).length ? `: ${JSON.stringify(params)}` : ''
     return `{{ '${key}' | i18n${p} }}`
   })
   // 索引字面量：{{ var.key['x'] }} 或 {{ var.key["x"] }}
-  s = s.replace(/\{\{\s*([A-Za-z_]\w*)\.([A-Za-z0-9_.]+)\s*\[(['"])([^'\"]+)\3\]\s*\}\}/g, (_m, _v, base, _q, lit) => {
+  s = s.replace(/\{\{\s*([A-Za-z_]\w*)\.([A-Za-z0-9_.]+)\s*\[(['"])([^'\"]+)\3\]\s*\}\}/g, (_m, v, base, _q, lit) => {
+    if (!varNames.includes(String(v))) return _m
     return `{{ '${base}.${lit}' | i18n }}`
   })
   // 索引动态表达式：{{ var.key[idx] }} → {{ ('key.' + idx) | i18n }}
-  s = s.replace(/\{\{\s*([A-Za-z_]\w*)\.([A-Za-z0-9_.]+)\s*\[([^\]]+)\]\s*\}\}/g, (_m, _v, base, expr) => {
+  s = s.replace(/\{\{\s*([A-Za-z_]\w*)\.([A-Za-z0-9_.]+)\s*\[([^\]]+)\]\s*\}\}/g, (_m, v, base, expr) => {
+    if (!varNames.includes(String(v))) return _m
     return `{{ ('${base}.' + ${expr.trim()}) | i18n }}`
   })
   // 简单属性：{{ var.key }} → {{ 'key' | i18n }}
-  s = s.replace(/\{\{\s*([A-Za-z_]\w*)\.([A-Za-z0-9_.]+)\s*\}\}/g, (_m, _v, key) => {
+  s = s.replace(/\{\{\s*([A-Za-z_]\w*)\.([A-Za-z0-9_.]+)\s*\}\}/g, (_m, v, key) => {
+    if (!varNames.includes(String(v))) return _m
     return `{{ '${key}' | i18n }}`
   })
   return s
@@ -76,36 +83,119 @@ function restoreHtmlContent(src: string, alias: string | null): string { // 将�
 
 function collectGetLocalVars(tsCode: string): string[] {
   const names = new Set<string>()
-  const re = /this\.([A-Za-z_]\w*)\s*=\s*[^;]*\.getLocal\([^)]*\)/g
+  const re = /this\.([A-Za-z_]\w*)\s*=\s*[^;]*\.getLocale\([^)]*\)/g
   let m: RegExpExecArray | null
   while ((m = re.exec(tsCode))) names.add(m[1])
   return Array.from(names)
 }
 
-function processTsFile(tsPath: string): { changed: boolean } {
+function buildAliases(tsCode: string): Array<{ name: string; prefix: string | null }> {
+  const sf = ts.createSourceFile('x.ts', tsCode, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  const aliases = collectVarAliases(sf, 'locale', 'getLocale')
+  const out: Array<{ name: string; prefix: string | null }> = []
+  for (const a of aliases) out.push({ name: a.name, prefix: a.prefix })
+  const rx = /\b([A-Za-z_]\w*)\s*=\s*this\.locale\.getLocale\s*\(/g
+  let m: RegExpExecArray | null
+  while ((m = rx.exec(tsCode))) out.push({ name: m[1], prefix: null })
+  if (/this\.i18n\./.test(tsCode) && !out.find(x => x.name === 'i18n')) out.push({ name: 'i18n', prefix: null })
+  if (/this\.dict\./.test(tsCode) && !out.find(x => x.name === 'dict')) out.push({ name: 'dict', prefix: null })
+  return Array.from(new Set(out.map(o => JSON.stringify(o)))).map(s => JSON.parse(s))
+}
+
+function replaceTsContent(src: string): string {
+  let s = src
+  const aliases = buildAliases(src)
+  for (const a of aliases) {
+    const name = a.name
+    const prefix = a.prefix ? a.prefix + '.' : ''
+    // chain .replace()
+    s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)((?:\\.replace\\([^)]*\\))+)`, 'g'), (_m, path, chain) => {
+      const params = extractReplaceParams(chain)
+      return renderTsGet(name, { keyExpr: `${prefix}${path}`, params })
+    })
+    // element access with string literal '...'
+    s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)\\s*\\[\\s*'([^']+)'\\s*\\]`, 'g'), (_m, base, lit) => {
+      return renderTsGet(name, { keyExpr: `${prefix}${base}.${lit}` })
+    })
+    // element access with string literal "..."
+    s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)\\s*\\[\\s*\"([^\"]+)\"\\s*\\]`, 'g'), (_m, base, lit) => {
+      return renderTsGet(name, { keyExpr: `${prefix}${base}.${lit}` })
+    })
+    // dynamic element access [expr]
+    s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)\\s*\\[([^\\]]+)\\]`, 'g'), (_m, base, expr) => {
+      return renderTsGet(name, { keyExpr: `'${prefix}${base}.' + ${String(expr).trim()}` })
+    })
+    // plain property chain (not followed by call/replace/[ or assignment)
+    s = s.replace(new RegExp(`(^|[\\s,(])this\\.${name}\\.([A-Za-z0-9_.]+)(?!\\s*\\(|\\s*\\.replace|\\s*\\[|\\s*=)`, 'g'), (_m, pre, path) => {
+      return `${pre}${renderTsGet(name, { keyExpr: `${prefix}${path}` })}`
+    })
+  }
+  return s
+}
+
+function processTsFile(tsPath: string): { changed: boolean; code: string; aliases: string[]; htmlPath: string | null } {
   const before = readFile(tsPath)
   const varNames = collectGetLocalVars(before)
-  const after = pruneUnused({} as any, before, varNames)
+  let after = pruneUnused({} as any, before, varNames)
+  after = replaceTsContent(after)
+  const sf = ts.createSourceFile(tsPath, after, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  const aliases = collectVarAliases(sf, 'locale', 'getLocale').map(a => a.name)
+  // also include direct assignments from locale.getLocale()
+  const rx = /\b([A-Za-z_]\w*)\s*=\s*this\.locale\.getLocale\s*\(/g
+  let mm: RegExpExecArray | null
+  while ((mm = rx.exec(after))) aliases.push(mm[1])
+  if (/\bi18n\s*:\s*/.test(after) || /this\.i18n\s*=/.test(after)) aliases.push('i18n')
+  if (/\bdict\s*:\s*/.test(after) || /this\.dict\s*=/.test(after)) aliases.push('dict')
+  // detect Angular Component and templateUrl
+  let htmlPath: string | null = null
+  const visit = (node: ts.Node) => {
+    if (ts.isClassDeclaration(node)) {
+      const decos = ts.canHaveDecorators(node) ? ts.getDecorators(node) : undefined
+      for (const d of decos || []) {
+        const expr = d.expression
+        if (ts.isCallExpression(expr) && ts.isIdentifier(expr.expression) && expr.expression.text === 'Component') {
+          const arg = expr.arguments[0]
+          if (arg && ts.isObjectLiteralExpression(arg)) {
+            for (const prop of arg.properties) {
+              if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name) && prop.name.text === 'templateUrl') {
+                const v = prop.initializer
+                if (v && ts.isStringLiteral(v)) {
+                  const dir = path.dirname(tsPath)
+                  htmlPath = path.resolve(dir, v.text)
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sf)
   if (after !== before) writeFile(tsPath, after)
-  return { changed: after !== before }
+  return { changed: after !== before, code: after, aliases: Array.from(new Set(aliases)), htmlPath }
 }
 
-function detectAliasName(tsPath: string): string | null { // 从同名 TS 文件检测 i18n 别名变量
+function collectHtmlAliases(tsPath: string): string[] {
   try {
     const code = readFile(tsPath)
-    if (/\bi18n\s*:\s*/.test(code) || /this\.i18n\s*=/.test(code)) return 'i18n'
-    if (/\bdict\s*:\s*/.test(code) || /this\.dict\s*=/.test(code)) return 'dict'
-    const m = code.match(/\b([A-Za-z_]\w*)\s*=\s*this\.locale\.getLocale\s*\(/)
-    if (m) return m[1]
-    return null
-  } catch { return null }
+    const sf = ts.createSourceFile('c.ts', code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+    const aliases = collectVarAliases(sf, 'locale', 'getLocale')
+    const names = new Set<string>()
+    for (const a of aliases) names.add(a.name)
+    const rx = /\b([A-Za-z_]\w*)\s*=\s*this\.locale\.getLocale\s*\(/g
+    let m: RegExpExecArray | null
+    while ((m = rx.exec(code))) names.add(m[1])
+    if (/\bi18n\s*:\s*/.test(code) || /this\.i18n\s*=/.test(code)) names.add('i18n')
+    if (/\bdict\s*:\s*/.test(code) || /this\.dict\s*=/.test(code)) names.add('dict')
+    return Array.from(names)
+  } catch { return [] }
 }
 
-function processHtmlFile(htmlPath: string, mode: 'replace' | 'restore'): { changed: boolean } {
+function processHtmlWithAliases(htmlPath: string, mode: 'replace' | 'restore', varNames: string[]): { changed: boolean } {
   const before = readFile(htmlPath)
-  const tsPath = htmlPath.replace(/\.html$/, '.ts')
-  const alias = detectAliasName(tsPath)
-  const after = mode === 'restore' ? restoreHtmlContent(before, alias) : replaceHtmlContent(before)
+  const alias = varNames.includes('i18n') ? 'i18n' : (varNames[0] || null)
+  const after = mode === 'restore' ? restoreHtmlContent(before, alias) : replaceHtmlContent(before, varNames)
   if (after !== before) writeFile(htmlPath, after)
   return { changed: after !== before }
 }
@@ -121,15 +211,14 @@ function main() {
     if (r) mode = r[1] as any
   }
   const tsFiles = walk(dir, p => p.endsWith('.ts'))
-  const htmlFiles = walk(dir, p => p.endsWith('.html'))
   const results: Array<{ file: string; type: 'ts'|'html'; changed: boolean }> = []
   for (const f of tsFiles) {
     const r = processTsFile(f)
     results.push({ file: f, type: 'ts', changed: r.changed })
-  }
-  for (const f of htmlFiles) {
-    const r = processHtmlFile(f, mode)
-    results.push({ file: f, type: 'html', changed: r.changed })
+    if (r.htmlPath && fs.existsSync(r.htmlPath)) {
+      const hr = processHtmlWithAliases(r.htmlPath, mode, r.aliases)
+      results.push({ file: r.htmlPath, type: 'html', changed: hr.changed })
+    }
   }
   const changed = results.filter(r => r.changed).length
   const summary = { dir, files: results.length, changed }
