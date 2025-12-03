@@ -2,12 +2,12 @@
   <div style="display:flex; gap:0.5rem">
   </div>
 
-  <h2>{{ dict.app.title }}</h2>
-  <p>{{ dict.app.description }}</p>
-  <p>{{ dict.home.welcome }}</p>
+  <h2>{{ 'app.title' | i18n }}</h2>
+  <p>{{ 'app.description' | i18n }}</p>
+  <p>{{ 'home.welcome' | i18n }}</p>
 
   <h3>模板替换</h3>
-  <p>{{ dict.templates.info.replace('{name}', '张三').replace('{count}', '5') }}</p>
+  <p>{{ 'templates.info' | i18n: {"name":"'张三'","count":"'5'"} }}</p>
 
   <h3>数组词条</h3>
   <ul>

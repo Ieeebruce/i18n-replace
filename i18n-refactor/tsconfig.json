@@ -5,7 +5,7 @@
     "strict": true,
     "esModuleInterop": true,
     "moduleResolution": "node",
-    "types": ["jest"],
+    "types": ["jest", "node"],
     "typeRoots": ["../node_modules/@types"],
     "baseUrl": "./src",
     "outDir": "./dist"
