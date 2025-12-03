@@ -15,4 +15,13 @@
       {{ it }}
     </li>
   </ul>
+
+  <h3>合并覆盖演示</h3>
+  <p>合并后 header（两根均存在，选 app）：{{ dictMerge.header }}</p>
+  <p>合并后 footer（两根均存在，选 app）：{{ dictMerge.footer }}</p>
+  <p>合并后 onlyCommon（仅 common 存在）：{{ dictMerge.onlyCommon }}</p>
+  <p>合并后 onlyApp（仅 app 存在）：{{ dictMerge.onlyApp }}</p>
+  <p>合并后 shared.label（两根均存在，选 app）：{{ dictMerge.shared.label }}</p>
+  <p>合并后 settings.theme（两根均存在，选 app）：{{ dictMerge.settings.theme }}</p>
+  <p>合并后 user.greetTpl 模板：{{ dictMerge.user.greetTpl.replace('{name}', '韩梅梅') }}</p>
 </section>

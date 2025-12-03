@@ -3,7 +3,23 @@ export const en = {
     title: 'Angular i18n (TS objects) demo',
     description: 'Translations are defined in TypeScript and referenced via objects.',
     switchToEn: 'Switch to English',
-    switchToZh: '切换到中文'
+    switchToZh: '切换到中文',
+    footer: 'Footer',
+    header: 'App header override',
+    onlyApp: 'Only in app',
+    common: { desc: 'App overrides common description' },
+    shared: { label: 'App label override' },
+    settings: { theme: 'App theme' },
+    user: { greetTpl: 'App hi, {name}!'}
+  },
+  common: {
+    common: { desc: 'Common description' },
+    header: 'Common header',
+    footer: 'Common footer',
+    onlyCommon: 'Only in common',
+    shared: { label: 'Common label' },
+    settings: { theme: 'Default theme' },
+    user: { greetTpl: 'Hi, {name}!'}
   },
   home: {
     welcome: 'Welcome!'
