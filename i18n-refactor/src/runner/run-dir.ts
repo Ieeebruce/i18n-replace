@@ -6,6 +6,7 @@ import { extractReplaceParams } from '../core/params-extractor'
 import { pruneUnused } from '../replace/prune'
 import { collectVarAliases } from '../core/var-alias'
 import { renderTsGet } from '../replace/ts-replace'
+import { pickRoot, setDictDir } from '../util/dict-reader'
 
 function readFile(p: string): string { return fs.readFileSync(p, 'utf8') }
 function writeFile(p: string, s: string) { fs.writeFileSync(p, s, 'utf8') }
@@ -20,29 +21,47 @@ function walk(dir: string, filter: (p: string) => boolean): string[] {
   return out
 }
 
-function replaceHtmlContent(src: string, varNames: string[]): string {
+function replaceHtmlContent(src: string, aliasInfos: Array<{ name: string; roots?: string[]; prefix?: string | null }>): string {
   let s = src
+  const info = new Map<string, { roots?: string[]; prefix?: string | null }>()
+  for (const a of aliasInfos) info.set(a.name, { roots: a.roots, prefix: a.prefix })
   // 链式模板替换：{{ var.key.replace('{a}', x).replace('{b}', y) }} → {{ 'key' | i18n: {a:x,b:y} }}
   s = s.replace(/\{\{\s*([A-Za-z_]\w*)\.([A-Za-z0-9_.]+)((?:\.replace\([^)]*\))+)[^}]*\}\}/g, (_m, v, key, chain) => {
-    if (!varNames.includes(String(v))) return _m
+    const vn = String(v)
+    const ai = info.get(vn)
+    if (!ai) return _m
+    const rp = ai.roots && ai.roots.length ? pickRoot(ai.roots, String(key)) : ''
+    const rootPrefix = rp ? rp + '.' : ''
     const params = extractReplaceParams(chain)
     const p = Object.keys(params).length ? `: ${JSON.stringify(params)}` : ''
-    return `{{ '${key}' | i18n${p} }}`
+    return `{{ '${rootPrefix}${key}' | i18n${p} }}`
   })
   // 索引字面量：{{ var.key['x'] }} 或 {{ var.key["x"] }}
   s = s.replace(/\{\{\s*([A-Za-z_]\w*)\.([A-Za-z0-9_.]+)\s*\[(['"])([^'\"]+)\3\]\s*\}\}/g, (_m, v, base, _q, lit) => {
-    if (!varNames.includes(String(v))) return _m
-    return `{{ '${base}.${lit}' | i18n }}`
+    const vn = String(v)
+    const ai = info.get(vn)
+    if (!ai) return _m
+    const rp = ai.roots && ai.roots.length ? pickRoot(ai.roots, String(base)) : ''
+    const rootPrefix = rp ? rp + '.' : ''
+    return `{{ '${rootPrefix}${base}.${lit}' | i18n }}`
   })
   // 索引动态表达式：{{ var.key[idx] }} → {{ ('key.' + idx) | i18n }}
   s = s.replace(/\{\{\s*([A-Za-z_]\w*)\.([A-Za-z0-9_.]+)\s*\[([^\]]+)\]\s*\}\}/g, (_m, v, base, expr) => {
-    if (!varNames.includes(String(v))) return _m
-    return `{{ ('${base}.' + ${expr.trim()}) | i18n }}`
+    const vn = String(v)
+    const ai = info.get(vn)
+    if (!ai) return _m
+    const rp = ai.roots && ai.roots.length ? pickRoot(ai.roots, String(base)) : ''
+    const rootPrefix = rp ? rp + '.' : ''
+    return `{{ ('${rootPrefix}${base}.' + ${expr.trim()}) | i18n }}`
   })
   // 简单属性：{{ var.key }} → {{ 'key' | i18n }}
   s = s.replace(/\{\{\s*([A-Za-z_]\w*)\.([A-Za-z0-9_.]+)\s*\}\}/g, (_m, v, key) => {
-    if (!varNames.includes(String(v))) return _m
-    return `{{ '${key}' | i18n }}`
+    const vn = String(v)
+    const ai = info.get(vn)
+    if (!ai) return _m
+    const rp = ai.roots && ai.roots.length ? pickRoot(ai.roots, String(key)) : ''
+    const rootPrefix = rp ? rp + '.' : ''
+    return `{{ '${rootPrefix}${key}' | i18n }}`
   })
   return s
 }
@@ -89,16 +108,22 @@ function collectGetLocalVars(tsCode: string): string[] {
   return Array.from(names)
 }
 
-function buildAliases(tsCode: string): Array<{ name: string; prefix: string | null }> {
+function buildAliases(tsCode: string): Array<{ name: string; prefix: string | null; roots?: string[] }> {
   const sf = ts.createSourceFile('x.ts', tsCode, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
   const aliases = collectVarAliases(sf, 'locale', 'getLocale')
-  const out: Array<{ name: string; prefix: string | null }> = []
-  for (const a of aliases) out.push({ name: a.name, prefix: a.prefix })
+  const out: Array<{ name: string; prefix: string | null; roots?: string[] }> = []
+  for (const a of aliases) out.push({ name: a.name, prefix: a.prefix, roots: a.roots })
   const rx = /\b([A-Za-z_]\w*)\s*=\s*this\.locale\.getLocale\s*\(/g
   let m: RegExpExecArray | null
   while ((m = rx.exec(tsCode))) out.push({ name: m[1], prefix: null })
   if (/this\.i18n\./.test(tsCode) && !out.find(x => x.name === 'i18n')) out.push({ name: 'i18n', prefix: null })
   if (/this\.dict\./.test(tsCode) && !out.find(x => x.name === 'dict')) out.push({ name: 'dict', prefix: null })
+  const rxAny = /this\.([A-Za-z_]\w*)\./g
+  let am: RegExpExecArray | null
+  while ((am = rxAny.exec(tsCode))) {
+    const nm = am[1]
+    if (nm !== 'locale' && !out.find(x => x.name === nm)) out.push({ name: nm, prefix: null })
+  }
   return Array.from(new Set(out.map(o => JSON.stringify(o)))).map(s => JSON.parse(s))
 }
 
@@ -107,28 +132,36 @@ function replaceTsContent(src: string): string {
   const aliases = buildAliases(src)
   for (const a of aliases) {
     const name = a.name
-    const prefix = a.prefix ? a.prefix + '.' : ''
+    const composeKey = (path: string) => {
+      if (a.prefix) return `${a.prefix}.${path}`
+      if (a.roots && a.roots.length) {
+        const r = pickRoot(a.roots, path)
+        return r ? `${r}.${path}` : path
+      }
+      return path
+    }
     // chain .replace()
-    s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)((?:\\.replace\\([^)]*\\))+)`, 'g'), (_m, path, chain) => {
-      const params = extractReplaceParams(chain)
-      return renderTsGet(name, { keyExpr: `${prefix}${path}`, params })
-    })
+  s = s.replace(new RegExp(`this\.${name}\.([A-Za-z0-9_.]+)((?:\\.replace\\([^)]*\\))+)`, 'g'), (_m, path, chain) => {
+    const params = extractReplaceParams(chain)
+    return renderTsGet(name, { keyExpr: composeKey(String(path)), params })
+  })
     // element access with string literal '...'
-    s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)\\s*\\[\\s*'([^']+)'\\s*\\]`, 'g'), (_m, base, lit) => {
-      return renderTsGet(name, { keyExpr: `${prefix}${base}.${lit}` })
-    })
+  s = s.replace(new RegExp(`this\.${name}\.([A-Za-z0-9_.]+)\\s*\\[\\s*'([^']+)'\\s*\\]`, 'g'), (_m, base, lit) => {
+    return renderTsGet(name, { keyExpr: composeKey(`${String(base)}.${String(lit)}`) })
+  })
     // element access with string literal "..."
-    s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)\\s*\\[\\s*\"([^\"]+)\"\\s*\\]`, 'g'), (_m, base, lit) => {
-      return renderTsGet(name, { keyExpr: `${prefix}${base}.${lit}` })
-    })
+  s = s.replace(new RegExp(`this\.${name}\.([A-Za-z0-9_.]+)\\s*\\[\\s*\"([^\"]+)\"\\s*\\]`, 'g'), (_m, base, lit) => {
+    return renderTsGet(name, { keyExpr: composeKey(`${String(base)}.${String(lit)}`) })
+  })
     // dynamic element access [expr]
-    s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)\\s*\\[([^\\]]+)\\]`, 'g'), (_m, base, expr) => {
-      return renderTsGet(name, { keyExpr: `'${prefix}${base}.' + ${String(expr).trim()}` })
-    })
+  s = s.replace(new RegExp(`this\.${name}\.([A-Za-z0-9_.]+)\\s*\\[([^\\]]+)\\]`, 'g'), (_m, base, expr) => {
+    const basePath = composeKey(String(base))
+    return renderTsGet(name, { keyExpr: `'${basePath}.' + ${String(expr).trim()}` })
+  })
     // plain property chain (not followed by call/replace/[ or assignment)
-    s = s.replace(new RegExp(`(^|[\\s,(])this\\.${name}\\.([A-Za-z0-9_.]+)(?!\\s*\\(|\\s*\\.replace|\\s*\\[|\\s*=)`, 'g'), (_m, pre, path) => {
-      return `${pre}${renderTsGet(name, { keyExpr: `${prefix}${path}` })}`
-    })
+  s = s.replace(new RegExp(`(^|[\\s,(])this\.${name}\.([A-Za-z0-9_.]+)(?!\\s*\\(|\\s*\\.replace|\\s*\\[|\\s*=)`, 'g'), (_m, pre, path) => {
+    return `${pre}${renderTsGet(name, { keyExpr: composeKey(String(path)) })}`
+  })
   }
   return s
 }
@@ -138,6 +171,25 @@ function processTsFile(tsPath: string): { changed: boolean; code: string; aliase
   const varNames = collectGetLocalVars(before)
   let after = pruneUnused({} as any, before, varNames)
   after = replaceTsContent(after)
+  // unify alias get-calls to this.i18n.get
+  const aliasInfos = buildAliases(after)
+  for (const a of aliasInfos) {
+    if (a.name !== 'i18n') {
+      after = after.replace(new RegExp(`this\\.${a.name}\\\.get(?!Locale)\\s*\\(`, 'g'), 'this.i18n.get(')
+      after = after.replace(new RegExp(`\\b${a.name}\\s*:\\s*any\\s*;`, 'g'), '')
+    }
+  }
+  // normalize constructor to inject I18nService
+  after = after.replace(/constructor\s*\(([^)]*)\)/, (m, params) => {
+    let p = params
+    p = p.replace(/\b(private|public)?\s*locale\s*:\s*I18nLocaleService\b/, 'public i18n: I18nService')
+    if (!/I18nService\b/.test(p)) {
+      p = (p.trim().length ? p + ', ' : '') + 'public i18n: I18nService'
+    }
+    return `constructor(${p})`
+  })
+  // remove remaining getLocale/getLocal assignments
+  after = after.replace(/this\.[A-Za-z_]\w*\s*=\s*[^;]*\.(?:getLocal|getLocale)\([^)]*\)(?:\.[A-Za-z0-9_.]+)?\s*;?/g, '')
   const sf = ts.createSourceFile(tsPath, after, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
   const aliases = collectVarAliases(sf, 'locale', 'getLocale').map(a => a.name)
   // also include direct assignments from locale.getLocale()
@@ -192,10 +244,11 @@ function collectHtmlAliases(tsPath: string): string[] {
   } catch { return [] }
 }
 
-function processHtmlWithAliases(htmlPath: string, mode: 'replace' | 'restore', varNames: string[]): { changed: boolean } {
+function processHtmlWithAliases(htmlPath: string, mode: 'replace' | 'restore', aliasInfos: Array<{ name: string; roots?: string[]; prefix?: string | null }>): { changed: boolean } {
   const before = readFile(htmlPath)
-  const alias = varNames.includes('i18n') ? 'i18n' : (varNames[0] || null)
-  const after = mode === 'restore' ? restoreHtmlContent(before, alias) : replaceHtmlContent(before, varNames)
+  const aliasNames = aliasInfos.map(a => a.name)
+  const alias = aliasNames.includes('i18n') ? 'i18n' : (aliasNames[0] || null)
+  const after = mode === 'restore' ? restoreHtmlContent(before, alias) : replaceHtmlContent(before, aliasInfos)
   if (after !== before) writeFile(htmlPath, after)
   return { changed: after !== before }
 }
@@ -209,6 +262,8 @@ function main() {
     if (m) dir = path.isAbsolute(m[1]) ? m[1] : path.join(process.cwd(), m[1])
     const r = a.match(/^--mode=(replace|restore)$/)
     if (r) mode = r[1] as any
+    const d = a.match(/^--dictDir=(.+)$/)
+    if (d) setDictDir(d[1])
   }
   const tsFiles = walk(dir, p => p.endsWith('.ts'))
   const results: Array<{ file: string; type: 'ts'|'html'; changed: boolean }> = []
@@ -216,7 +271,8 @@ function main() {
     const r = processTsFile(f)
     results.push({ file: f, type: 'ts', changed: r.changed })
     if (r.htmlPath && fs.existsSync(r.htmlPath)) {
-      const hr = processHtmlWithAliases(r.htmlPath, mode, r.aliases)
+      const aliasInfos = buildAliases(r.code)
+      const hr = processHtmlWithAliases(r.htmlPath, mode, aliasInfos)
       results.push({ file: r.htmlPath, type: 'html', changed: hr.changed })
     }
   }

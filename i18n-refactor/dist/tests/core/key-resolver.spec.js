@@ -8,13 +8,11 @@ const key_resolver_1 = require("../../src/core/key-resolver");
 function expr(code) {
     const sf = typescript_1.default.createSourceFile('x.ts', code, typescript_1.default.ScriptTarget.Latest, true, typescript_1.default.ScriptKind.TS);
     const stmt = sf.statements[0];
-    console.log(stmt.expression);
     return stmt.expression;
 }
 test('resolve with alias prefix single segment', () => {
     const e = expr(`this.i18n.title`);
     const r = (0, key_resolver_1.resolveKeyFromAccess)(typescript_1.default.createSourceFile('x.ts', '', typescript_1.default.ScriptTarget.Latest, true, typescript_1.default.ScriptKind.TS), e, 'app.common', []);
-    console.log(r);
     expect(r.keyExpr).toBe('app.common.title');
 });
 test('resolve multi segments with alias prefix', () => {
