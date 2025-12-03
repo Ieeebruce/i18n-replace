@@ -16,7 +16,7 @@ export class MergeAssignComponent {
   title2: string;
   constructor(public locale: I18nLocaleService) {
     this.dict = this.locale.getLocale();
-    this.i18n = {...this.dict.app, ...this.dict.home}
+    this.i18n = {...this.locale.getLocale().app, ...this.locale.getLocale().home}
   }
 
   xx() {
