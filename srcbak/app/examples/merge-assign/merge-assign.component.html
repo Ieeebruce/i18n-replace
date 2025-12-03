@@ -1,0 +1,18 @@
+<section style="padding:1rem">
+  <div style="display:flex; gap:0.5rem">
+  </div>
+
+  <h2>{{ 'app.title' | i18n }}</h2>
+  <p>{{ 'app.description' | i18n }}</p>
+  <p>{{ 'home.welcome' | i18n }}</p>
+
+  <h3>模板替换</h3>
+  <p>{{ 'templates.info' | i18n: {"name":"'张三'","count":"'5'"} }}</p>
+
+  <h3>数组词条</h3>
+  <ul>
+    <li *ngFor="let it of dict.list.items; let i=index">
+      {{ it }}
+    </li>
+  </ul>
+</section>

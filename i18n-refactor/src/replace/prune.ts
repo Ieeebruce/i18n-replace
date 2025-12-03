@@ -11,6 +11,6 @@ export function pruneUnused(sf: ts.SourceFile, code: string, varNames: string[])
     out = out.replace(reDeclBare, '') // 删除仅声明语句
     out = out.replace(new RegExp(`\b${v}\s*:\s*any\s*;`, 'g'), '') // 删除 any 类型声明
   } // 结束变量遍历
-  out = out.replace(/\blocal\s*:\s*any\s*;/g, '') // 兜底：移除 local: any; 声明
+  out = out.replace(/\blocal\s*:\s*any\s*;/g, '') // 兜底：移除  声明
   return out // 返回清理后的代码
 } // 函数结束
