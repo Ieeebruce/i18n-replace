@@ -6,9 +6,9 @@
     "types": []
   },
   "files": [
-    "src-refactor-test/main.ts"
+    "src/main.ts"
   ],
   "include": [
-    "src-refactor-test/**/*.d.ts"
+    "src/**/*.d.ts"
   ]
 }

@@ -14,26 +14,26 @@
         }
       },
       "root": "",
-      "sourceRoot": "src-refactor-test",
+      "sourceRoot": "src",
       "prefix": "app",
       "architect": {
         "build": {
           "builder": "@angular-devkit/build-angular:application",
           "options": {
             "outputPath": "dist/i18n-demo",
-            "index": "src-refactor-test/index.html",
-            "browser": "src-refactor-test/main.ts",
+            "index": "src/index.html",
+            "browser": "src/main.ts",
             "polyfills": [
               "zone.js"
             ],
             "tsConfig": "tsconfig.app.json",
             "inlineStyleLanguage": "scss",
             "assets": [
-              "src-refactor-test/favicon.ico",
-              "src-refactor-test/assets"
+              "src/favicon.ico",
+              "src/assets"
             ],
             "styles": [
-              "src-refactor-test/styles.scss"
+              "src/styles.scss"
             ],
             "scripts": []
           },
@@ -89,11 +89,11 @@
             "tsConfig": "tsconfig.spec.json",
             "inlineStyleLanguage": "scss",
             "assets": [
-              "src-refactor-test/favicon.ico",
-              "src-refactor-test/assets"
+              "src/favicon.ico",
+              "src/assets"
             ],
             "styles": [
-              "src-refactor-test/styles.scss"
+              "src/styles.scss"
             ],
             "scripts": []
           }

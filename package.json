@@ -14,7 +14,7 @@
     "i18n:report": "node scripts/report-i18n.js",
     "build:scripts": "tsc -p scripts/tsconfig.json",
     "test:ast": "npm run build:scripts && node scripts/dist/utils/ast.spec.js",
-    "refactor:test": "node scripts/refactor-test.js"
+    "refactor:test": "node node_modules/jest/bin/jest.js --colors"
   },
   "private": true,
   "dependencies": {
