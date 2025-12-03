@@ -10,10 +10,11 @@ export const en = {
     common: { desc: 'App overrides common description' },
     shared: { label: 'App label override' },
     settings: { theme: 'App theme' },
-    user: { greetTpl: 'App hi, {name}!'}
+    user: { greetTpl: 'App hi, {name}!'},
+    app: { desc: 'App description' }
   },
   common: {
-    common: { desc: 'Common description' },
+    common: { title: 'Common title', desc: 'Common description' },
     header: 'Common header',
     footer: 'Common footer',
     onlyCommon: 'Only in common',

@@ -1,24 +1,24 @@
 #!/usr/bin/env node
-import * as fs from 'fs'
-import * as path from 'path'
-import ts from 'typescript'
-import { extractReplaceParams } from '../core/params-extractor'
-import { pruneUnused } from '../replace/prune'
-import { collectVarAliases } from '../core/var-alias'
-import { renderTsGet } from '../replace/ts-replace'
-import { pickRoot, setDictDir } from '../util/dict-reader'
+import * as fs from 'fs' // 文件系统，用于读写
+import * as path from 'path' // 路径工具，用于定位
+import ts from 'typescript' // TypeScript AST 解析
+import { extractReplaceParams } from '../core/params-extractor' // 提取 replace 参数对象
+import { pruneUnused } from '../replace/prune' // 清理无用别名声明/赋值
+import { collectVarAliases } from '../core/var-alias' // AST 收集别名信息
+import { renderTsGet } from '../replace/ts-replace' // 渲染 TS 调用 this.<alias>.get
+import { pickRoot, setDictDir } from '../util/dict-reader' // 选择字典根与设置字典目录
 
-function readFile(p: string): string { return fs.readFileSync(p, 'utf8') }
-function writeFile(p: string, s: string) { fs.writeFileSync(p, s, 'utf8') }
-function walk(dir: string, filter: (p: string) => boolean): string[] {
-  const out: string[] = []
-  const entries = fs.readdirSync(dir, { withFileTypes: true })
-  for (const e of entries) {
-    const full = path.join(dir, e.name)
-    if (e.isDirectory()) out.push(...walk(full, filter))
-    else if (filter(full)) out.push(full)
+function readFile(p: string): string { return fs.readFileSync(p, 'utf8') } // 读取文本文件
+function writeFile(p: string, s: string) { fs.writeFileSync(p, s, 'utf8') } // 写出文本文件
+function walk(dir: string, filter: (p: string) => boolean): string[] { // 递归遍历目录并按过滤器收集文件
+  const out: string[] = [] // 输出文件列表
+  const entries = fs.readdirSync(dir, { withFileTypes: true }) // 读取目录条目
+  for (const e of entries) { // 遍历条目
+    const full = path.join(dir, e.name) // 计算完整路径
+    if (e.isDirectory()) out.push(...walk(full, filter)) // 目录则递归
+    else if (filter(full)) out.push(full) // 文件且匹配过滤器则加入
   }
-  return out
+  return out // 返回
 }
 
 function replaceHtmlContent(src: string, aliasInfos: Array<{ name: string; roots?: string[]; prefix?: string | null }>): string {
@@ -253,32 +253,32 @@ function processHtmlWithAliases(htmlPath: string, mode: 'replace' | 'restore', a
   return { changed: after !== before }
 }
 
-function main() {
-  const args = process.argv.slice(2)
-  let dir = process.cwd()
-  let mode: 'replace' | 'restore' = 'replace'
-  for (const a of args) {
-    const m = a.match(/^--dir=(.+)$/)
-    if (m) dir = path.isAbsolute(m[1]) ? m[1] : path.join(process.cwd(), m[1])
-    const r = a.match(/^--mode=(replace|restore)$/)
-    if (r) mode = r[1] as any
-    const d = a.match(/^--dictDir=(.+)$/)
-    if (d) setDictDir(d[1])
+function main() { // CLI 主入口
+  const args = process.argv.slice(2) // 读取参数
+  let dir = process.cwd() // 默认目录为当前工作目录
+  let mode: 'replace' | 'restore' = 'replace' // 默认模式为替换
+  for (const a of args) { // 解析参数
+    const m = a.match(/^--dir=(.+)$/) // 指定目录
+    if (m) dir = path.isAbsolute(m[1]) ? m[1] : path.join(process.cwd(), m[1]) // 解析绝对/相对路径
+    const r = a.match(/^--mode=(replace|restore)$/) // 指定模式
+    if (r) mode = r[1] as any // 设置模式
+    const d = a.match(/^--dictDir=(.+)$/) // 指定字典目录
+    if (d) setDictDir(d[1]) // 设置目录
   }
-  const tsFiles = walk(dir, p => p.endsWith('.ts'))
-  const results: Array<{ file: string; type: 'ts'|'html'; changed: boolean }> = []
-  for (const f of tsFiles) {
-    const r = processTsFile(f)
-    results.push({ file: f, type: 'ts', changed: r.changed })
-    if (r.htmlPath && fs.existsSync(r.htmlPath)) {
-      const aliasInfos = buildAliases(r.code)
-      const hr = processHtmlWithAliases(r.htmlPath, mode, aliasInfos)
-      results.push({ file: r.htmlPath, type: 'html', changed: hr.changed })
+  const tsFiles = walk(dir, p => p.endsWith('.ts')) // 收集 TS 文件
+  const results: Array<{ file: string; type: 'ts'|'html'; changed: boolean }> = [] // 结果列表
+  for (const f of tsFiles) { // 遍历 TS
+    const r = processTsFile(f) // 处理 TS 文件
+    results.push({ file: f, type: 'ts', changed: r.changed }) // 记录结果
+    if (r.htmlPath && fs.existsSync(r.htmlPath)) { // 若关联模板存在
+      const aliasInfos = buildAliases(r.code) // 基于替换后 TS 构建别名信息
+      const hr = processHtmlWithAliases(r.htmlPath, mode, aliasInfos) // 处理模板
+      results.push({ file: r.htmlPath, type: 'html', changed: hr.changed }) // 记录结果
     }
   }
-  const changed = results.filter(r => r.changed).length
-  const summary = { dir, files: results.length, changed }
-  process.stdout.write(JSON.stringify({ summary, results }, null, 2) + '\n')
+  const changed = results.filter(r => r.changed).length // 统计变更数
+  const summary = { dir, files: results.length, changed } // 汇总信息
+  process.stdout.write(JSON.stringify({ summary, results }, null, 2) + '\n') // 输出 JSON 摘要
 }
 
-main()
+main() // 执行主程序

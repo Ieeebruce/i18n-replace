@@ -10,10 +10,11 @@ export const zh = {
     common: { desc: '应用覆盖的通用描述' },
     shared: { label: '应用标签覆盖' },
     settings: { theme: '应用主题' },
-    user: { greetTpl: '应用你好，{name}!' }
+    user: { greetTpl: '应用你好，{name}!' },
+    app: { desc: '应用描述' }
   },
   common: {
-    common: { desc: '通用描述' },
+    common: { title: '通用标题', desc: '通用描述' },
     header: '通用头部',
     footer: '通用页脚',
     onlyCommon: '仅通用',
