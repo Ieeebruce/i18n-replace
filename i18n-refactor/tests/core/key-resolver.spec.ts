@@ -4,12 +4,14 @@ import { resolveKeyFromAccess } from '../../src/core/key-resolver'
 function expr(code: string): ts.Expression {
   const sf = ts.createSourceFile('x.ts', code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
   const stmt = sf.statements[0] as ts.ExpressionStatement
+  console.log(stmt.expression)
   return stmt.expression
 }
 
 test('resolve with alias prefix single segment', () => {
   const e = expr(`this.i18n.title`)
   const r = resolveKeyFromAccess(ts.createSourceFile('x.ts','',ts.ScriptTarget.Latest,true,ts.ScriptKind.TS), e, 'app.common', [])
+  console.log(r)
   expect(r.keyExpr).toBe('app.common.title')
 })
 

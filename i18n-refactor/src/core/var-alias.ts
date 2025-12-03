@@ -1,104 +1,101 @@
-import ts from 'typescript'
+import ts from 'typescript' // 引入 TypeScript AST 工具
 
-export type VarAlias = { name: string; prefix: string | null; roots: string[] }
+export type VarAlias = { name: string; prefix: string | null; roots: string[] } // 变量别名信息：名称、前缀、根来源
 
-function isGetLocalCall(sf: ts.SourceFile, expr: ts.Expression, serviceParamName: string, getLocalMethod: string): boolean {
-  if (!expr || !ts.isCallExpression(expr)) return false
-  const ex = expr.expression
-  return ts.isPropertyAccessExpression(ex)
-    && ex.name.getText(sf) === getLocalMethod
-    && ts.isPropertyAccessExpression(ex.expression)
-    && ex.expression.expression.kind === ts.SyntaxKind.ThisKeyword
-    && ts.isIdentifier(ex.expression.name)
-    && ex.expression.name.getText(sf) === serviceParamName
+function isGetLocalCall(sf: ts.SourceFile, expr: ts.Expression, serviceParamName: string, getLocalMethod: string): boolean { // 是否为 this.<service>.getLocal(...) 调用
+  if (!expr || !ts.isCallExpression(expr)) return false // 不是调用表达式
+  const ex = expr.expression // 调用目标
+  return ts.isPropertyAccessExpression(ex) // 形如 a.b
+    && ex.name.getText(sf) === getLocalMethod // 方法名为 getLocal
+    && ts.isPropertyAccessExpression(ex.expression) // 前缀为 this.<service>
+    && ex.expression.expression.kind === ts.SyntaxKind.ThisKeyword // 以 this 开始
+    && ts.isIdentifier(ex.expression.name) // 服务名为标识符
+    && ex.expression.name.getText(sf) === serviceParamName // 服务名匹配
 }
 
-function chainAfterGetLocal(sf: ts.SourceFile, expr: ts.Expression): string[] {
-  const segs: string[] = []
-  let cur: ts.Expression = expr
-  while (ts.isPropertyAccessExpression(cur)) {
-    segs.push(cur.name.getText(sf))
-    cur = cur.expression
+function chainAfterGetLocal(sf: ts.SourceFile, expr: ts.Expression): string[] { // 提取 getLocal 调用后的属性链
+  const segs: string[] = [] // 存储段
+  let cur: ts.Expression = expr // 当前表达式
+  while (ts.isPropertyAccessExpression(cur)) { // 连续属性访问
+    segs.push(cur.name.getText(sf)) // 记录属性名
+    cur = cur.expression // 上溯
   }
-  return segs.reverse()
+  return segs.reverse() // 返回自左到右顺序
 }
 
-export function collectVarAliases(sf: ts.SourceFile, serviceParamName: string, getLocalMethod: string): VarAlias[] {
-  const out = new Map<string, VarAlias>()
-  function addAlias(name: string): VarAlias {
-    if (!out.has(name)) out.set(name, { name, prefix: null, roots: [] })
-    return out.get(name)!
+export function collectVarAliases(sf: ts.SourceFile, serviceParamName: string, getLocalMethod: string): VarAlias[] { // 收集别名：前缀与根来源
+  const out = new Map<string, VarAlias>() // 存储结果映射
+  function addAlias(name: string): VarAlias { // 获取或创建别名记录
+    if (!out.has(name)) out.set(name, { name, prefix: null, roots: [] }) // 初始化
+    return out.get(name)! // 返回记录
   }
-  function visit(node: ts.Node) {
-    // property initializer alias
-    if (ts.isPropertyDeclaration(node) && node.initializer && ts.isPropertyAccessExpression(node.initializer)) {
-      const base = node.initializer
-      let cur: ts.Expression = base
-      while (ts.isPropertyAccessExpression(cur)) cur = cur.expression
-      if (ts.isCallExpression(cur) && isGetLocalCall(sf, cur, serviceParamName, getLocalMethod)) {
-        const segs = chainAfterGetLocal(sf, base)
-        if (node.name && ts.isIdentifier(node.name)) {
-          const a = addAlias(node.name.getText(sf))
-          a.prefix = segs.join('.')
+  function visit(node: ts.Node) { // AST 访问
+    if (ts.isPropertyDeclaration(node) && node.initializer && ts.isPropertyAccessExpression(node.initializer)) { // 属性初始化为访问表达式
+      const base = node.initializer // 基本表达式
+      let cur: ts.Expression = base // 当前表达式
+      while (ts.isPropertyAccessExpression(cur)) cur = cur.expression // 上溯到调用
+      if (ts.isCallExpression(cur) && isGetLocalCall(sf, cur, serviceParamName, getLocalMethod)) { // 是 getLocal 调用
+        const segs = chainAfterGetLocal(sf, base) // 提取链
+        if (node.name && ts.isIdentifier(node.name)) { // 属性名标识符
+          const a = addAlias(node.name.getText(sf)) // 别名记录
+          a.prefix = segs.join('.') // 设置前缀
         }
       }
     }
-    // property initializer object literal spreads
-    if (ts.isPropertyDeclaration(node) && node.initializer && ts.isObjectLiteralExpression(node.initializer) && node.name && ts.isIdentifier(node.name)) {
-      const spreads = node.initializer.properties.filter(p => ts.isSpreadAssignment(p)) as ts.SpreadAssignment[]
-      const roots: string[] = []
-      for (const sp of spreads) {
-        const e = sp.expression
-        if (ts.isPropertyAccessExpression(e)) {
-          let cur: ts.Expression = e
-          while (ts.isPropertyAccessExpression(cur)) cur = cur.expression
-          if (ts.isCallExpression(cur) && isGetLocalCall(sf, cur, serviceParamName, getLocalMethod)) {
-            const segs = chainAfterGetLocal(sf, e)
-            if (segs.length) roots.push(segs[0])
+    if (ts.isPropertyDeclaration(node) && node.initializer && ts.isObjectLiteralExpression(node.initializer) && node.name && ts.isIdentifier(node.name)) { // 属性初始化为对象字面量
+      const spreads = node.initializer.properties.filter(p => ts.isSpreadAssignment(p)) as ts.SpreadAssignment[] // 收集展开项
+      const roots: string[] = [] // 根来源集合
+      for (const sp of spreads) { // 遍历展开
+        const e = sp.expression // 展开表达式
+        if (ts.isPropertyAccessExpression(e)) { // 属性访问
+          let cur: ts.Expression = e // 当前
+          while (ts.isPropertyAccessExpression(cur)) cur = cur.expression // 上溯
+          if (ts.isCallExpression(cur) && isGetLocalCall(sf, cur, serviceParamName, getLocalMethod)) { // getLocal 来源
+            const segs = chainAfterGetLocal(sf, e) // 取链
+            if (segs.length) roots.push(segs[0]) // 记录根段
           }
         }
       }
-      if (roots.length) {
-        const a = addAlias(node.name.getText(sf))
-        a.roots = roots
+      if (roots.length) { // 有根来源
+        const a = addAlias(node.name.getText(sf)) // 别名记录
+        a.roots = roots // 设置根顺序
       }
     }
-    // constructor assignments
-    if (ts.isConstructorDeclaration(node)) {
-      for (const s of node.body ? node.body.statements : []) {
-        if (ts.isExpressionStatement(s) && ts.isBinaryExpression(s.expression)) {
-          const be = s.expression
-          if (be.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isPropertyAccessExpression(be.left)) {
-            const left = be.left
-            if (left.expression.kind === ts.SyntaxKind.ThisKeyword && ts.isIdentifier(left.name)) {
-              const nm = left.name.getText(sf)
-              if (ts.isPropertyAccessExpression(be.right)) {
-                const base = be.right
-                let cur: ts.Expression = base
-                while (ts.isPropertyAccessExpression(cur)) cur = cur.expression
-                if (ts.isCallExpression(cur) && isGetLocalCall(sf, cur, serviceParamName, getLocalMethod)) {
-                  const segs = chainAfterGetLocal(sf, base)
-                  const a = addAlias(nm)
-                  a.prefix = segs.join('.')
+    if (ts.isConstructorDeclaration(node)) { // 构造函数赋值
+      for (const s of node.body ? node.body.statements : []) { // 遍历语句
+        if (ts.isExpressionStatement(s) && ts.isBinaryExpression(s.expression)) { // 赋值表达式
+          const be = s.expression // 二元表达式
+          if (be.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isPropertyAccessExpression(be.left)) { // 左侧为属性访问
+            const left = be.left // 左侧表达式
+            if (left.expression.kind === ts.SyntaxKind.ThisKeyword && ts.isIdentifier(left.name)) { // this.<name>
+              const nm = left.name.getText(sf) // 名称
+              if (ts.isPropertyAccessExpression(be.right)) { // 右侧为属性访问链
+                const base = be.right // 右侧表达式
+                let cur: ts.Expression = base // 当前
+                while (ts.isPropertyAccessExpression(cur)) cur = cur.expression // 上溯
+                if (ts.isCallExpression(cur) && isGetLocalCall(sf, cur, serviceParamName, getLocalMethod)) { // getLocal 调用
+                  const segs = chainAfterGetLocal(sf, base) // 链
+                  const a = addAlias(nm) // 别名记录
+                  a.prefix = segs.join('.') // 设置前缀
                 }
               }
-              if (ts.isObjectLiteralExpression(be.right)) {
-                const spreads = be.right.properties.filter(p => ts.isSpreadAssignment(p)) as ts.SpreadAssignment[]
-                const roots: string[] = []
-                for (const sp of spreads) {
-                  const e = sp.expression
-                  if (ts.isPropertyAccessExpression(e)) {
-                    let cur: ts.Expression = e
-                    while (ts.isPropertyAccessExpression(cur)) cur = cur.expression
-                    if (ts.isCallExpression(cur) && isGetLocalCall(sf, cur, serviceParamName, getLocalMethod)) {
-                      const segs = chainAfterGetLocal(sf, e)
-                      if (segs.length) roots.push(segs[0])
+              if (ts.isObjectLiteralExpression(be.right)) { // 右侧为对象字面量（合并）
+                const spreads = be.right.properties.filter(p => ts.isSpreadAssignment(p)) as ts.SpreadAssignment[] // 展开项
+                const roots: string[] = [] // 根来源集合
+                for (const sp of spreads) { // 遍历展开
+                  const e = sp.expression // 表达式
+                  if (ts.isPropertyAccessExpression(e)) { // 属性访问
+                    let cur: ts.Expression = e // 当前
+                    while (ts.isPropertyAccessExpression(cur)) cur = cur.expression // 上溯
+                    if (ts.isCallExpression(cur) && isGetLocalCall(sf, cur, serviceParamName, getLocalMethod)) { // 来源判断
+                      const segs = chainAfterGetLocal(sf, e) // 链
+                      if (segs.length) roots.push(segs[0]) // 记录根段
                     }
                   }
                 }
-                if (roots.length) {
-                  const a = addAlias(nm)
-                  a.roots = roots
+                if (roots.length) { // 有根来源
+                  const a = addAlias(nm) // 别名记录
+                  a.roots = roots // 设置根顺序
                 }
               }
             }
@@ -106,8 +103,8 @@ export function collectVarAliases(sf: ts.SourceFile, serviceParamName: string, g
         }
       }
     }
-    ts.forEachChild(node, visit)
+    ts.forEachChild(node, visit) // 递归子节点
   }
-  visit(sf)
-  return Array.from(out.values())
+  visit(sf) // 开始遍历
+  return Array.from(out.values()) // 返回别名列表
 }
