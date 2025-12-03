@@ -64,6 +64,39 @@ function replaceHtmlContent(src) {
     });
     return s;
 }
+function toReplaceChain(params) {
+    let chain = '';
+    for (const k of Object.keys(params)) {
+        chain += `.replace('{${k}}', ${params[k]})`;
+    }
+    return chain;
+}
+function restoreHtmlContent(src, alias) {
+    const varName = alias || 'i18n';
+    let s = src;
+    // 还原：{{ 'a.b.c' | i18n: {k:expr} }} → {{ varName.a.b.c.replace('{k}', expr) }}
+    s = s.replace(/\{\{\s*'([A-Za-z0-9_.]+)'\s*\|\s*i18n\s*:\s*(\{[^}]*\})\s*\}\}/g, (_m, key, obj) => {
+        try {
+            // 将对象字面量安全解析为键值对（保留 expr 文本，简单替换引号包装保持原值）
+            const sanitized = obj.replace(/(['"])\s*([^:'"])\s*\1\s*:/g, (_mm, _q, k) => `'${k}':`); // 规范化键
+            const parsed = Function(`return (${sanitized})`)();
+            const chain = toReplaceChain(parsed);
+            return `{{ ${varName}.${key}${chain} }}`;
+        }
+        catch {
+            return `{{ ${varName}.${key} }}`;
+        }
+    });
+    // 还原：{{ ('a.b.' + idx) | i18n }} → {{ varName.a.b[idx] }}
+    s = s.replace(/\{\{\s*\('([A-Za-z0-9_.]+)\.'\s*\+\s*([^\)]+)\)\s*\|\s*i18n\s*\}\}/g, (_m, base, expr) => {
+        return `{{ ${varName}.${base}[${expr.trim()}] }}`;
+    });
+    // 还原：{{ 'a.b.c' | i18n }} → {{ varName.a.b.c }}
+    s = s.replace(/\{\{\s*'([A-Za-z0-9_.]+)'\s*\|\s*i18n\s*\}\}/g, (_m, key) => {
+        return `{{ ${varName}.${key} }}`;
+    });
+    return s;
+}
 function collectGetLocalVars(tsCode) {
     const names = new Set();
     const re = /this\.([A-Za-z_]\w*)\s*=\s*[^;]*\.getLocal\([^)]*\)/g;
@@ -80,9 +113,24 @@ function processTsFile(tsPath) {
         writeFile(tsPath, after);
     return { changed: after !== before };
 }
-function processHtmlFile(htmlPath) {
+function detectAliasName(tsPath) {
+    try {
+        const code = readFile(tsPath);
+        if (/\bi18n\s*:\s*/.test(code) || /this\.i18n\s*=/.test(code))
+            return 'i18n';
+        if (/\bdict\s*:\s*/.test(code) || /this\.dict\s*=/.test(code))
+            return 'dict';
+        return null;
+    }
+    catch {
+        return null;
+    }
+}
+function processHtmlFile(htmlPath, mode) {
     const before = readFile(htmlPath);
-    const after = replaceHtmlContent(before);
+    const tsPath = htmlPath.replace(/\.html$/, '.ts');
+    const alias = detectAliasName(tsPath);
+    const after = mode === 'restore' ? restoreHtmlContent(before, alias) : replaceHtmlContent(before);
     if (after !== before)
         writeFile(htmlPath, after);
     return { changed: after !== before };
@@ -90,10 +138,14 @@ function processHtmlFile(htmlPath) {
 function main() {
     const args = process.argv.slice(2);
     let dir = process.cwd();
+    let mode = 'replace';
     for (const a of args) {
         const m = a.match(/^--dir=(.+)$/);
         if (m)
             dir = path.isAbsolute(m[1]) ? m[1] : path.join(process.cwd(), m[1]);
+        const r = a.match(/^--mode=(replace|restore)$/);
+        if (r)
+            mode = r[1];
     }
     const tsFiles = walk(dir, p => p.endsWith('.ts'));
     const htmlFiles = walk(dir, p => p.endsWith('.html'));
@@ -103,7 +155,7 @@ function main() {
         results.push({ file: f, type: 'ts', changed: r.changed });
     }
     for (const f of htmlFiles) {
-        const r = processHtmlFile(f);
+        const r = processHtmlFile(f, mode);
         results.push({ file: f, type: 'html', changed: r.changed });
     }
     const changed = results.filter(r => r.changed).length;
