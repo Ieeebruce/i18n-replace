@@ -80,4 +80,9 @@ export class MergeAssignComponent {
     const out = (0, component_1.processComponent)(ts, html);
     expect(out.tsOut).toContain(`this.i18n.get('home.welcome')`);
     expect(out.tsOut).toContain(`this.i18n.get('app.onlyApp')`);
+    expect(out.tsOut).toContain(`this.i18n.get('app.description')`);
+    expect(out.tsOut).toContain(`this.i18n.get('app.header')`);
+    expect(out.tsOut).toContain(`this.i18n.get('app.footer')`);
+    expect(out.tsOut).toContain(`this.i18n.get('common.onlyCommon')`);
+    expect(out.tsOut).toContain(`this.i18n.get('app.user.greetTpl', {\"name\":\"'李雷'\"}`);
 });

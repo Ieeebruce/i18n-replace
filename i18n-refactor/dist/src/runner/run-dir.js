@@ -159,6 +159,57 @@ function buildAliases(tsCode) {
 function replaceTsContent(src) {
     let s = src;
     const aliases = buildAliases(src);
+    // AST-based replacement for plain property chains this.<alias>.<path>
+    const sfAst = typescript_1.default.createSourceFile('x.ts', s, typescript_1.default.ScriptTarget.Latest, true, typescript_1.default.ScriptKind.TS);
+    const reps = [];
+    const info = new Map();
+    for (const a of aliases)
+        info.set(a.name, { prefix: a.prefix, roots: a.roots });
+    const composeAstKey = (a, path) => {
+        if (a.prefix)
+            return `${a.prefix}.${path}`;
+        if (a.roots && a.roots.length) {
+            const r = (0, dict_reader_1.pickRoot)(a.roots, path);
+            return r ? `${r}.${path}` : path;
+        }
+        return path;
+    };
+    const visitAst = (node) => {
+        if (typescript_1.default.isPropertyAccessExpression(node)) {
+            let outer = node;
+            while (typescript_1.default.isPropertyAccessExpression(outer.parent) && outer.parent.expression === outer)
+                outer = outer.parent;
+            let cur = outer;
+            const segs = [];
+            while (typescript_1.default.isPropertyAccessExpression(cur)) {
+                segs.unshift(cur.name.getText(sfAst));
+                cur = cur.expression;
+            }
+            if (typescript_1.default.isPropertyAccessExpression(cur) && cur.expression.kind === typescript_1.default.SyntaxKind.ThisKeyword && typescript_1.default.isIdentifier(cur.name)) {
+                const aliasName = cur.name.getText(sfAst);
+                const ai = info.get(aliasName);
+                if (ai) {
+                    const p = outer.parent;
+                    const isCall = typescript_1.default.isCallExpression(p) && p.expression === outer;
+                    const isEl = typescript_1.default.isElementAccessExpression(p) && p.expression === outer;
+                    const isAssignLHS = typescript_1.default.isBinaryExpression(p) && p.left === outer;
+                    const isReplaceChain = typescript_1.default.isPropertyAccessExpression(p) && p.name.getText(sfAst) === 'replace';
+                    if (!isCall && !isEl && !isAssignLHS && !isReplaceChain) {
+                        const path = segs.join('.');
+                        const text = (0, ts_replace_1.renderTsGet)(aliasName, { keyExpr: composeAstKey(ai, path) });
+                        reps.push({ s: outer.getStart(sfAst), e: outer.getEnd(), text });
+                    }
+                }
+            }
+        }
+        typescript_1.default.forEachChild(node, visitAst);
+    };
+    visitAst(sfAst);
+    if (reps.length) {
+        reps.sort((a, b) => b.s - a.s);
+        for (const r of reps)
+            s = s.slice(0, r.s) + r.text + s.slice(r.e);
+    }
     for (const a of aliases) {
         const name = a.name;
         const composeKey = (path) => {
@@ -171,26 +222,38 @@ function replaceTsContent(src) {
             return path;
         };
         // chain .replace()
-        s = s.replace(new RegExp(`this\.${name}\.([A-Za-z0-9_.]+)((?:\\.replace\\([^)]*\\))+)`, 'g'), (_m, path, chain) => {
+        s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)((?:\\.replace\\([^)]*\\))+)`, 'g'), (_m, path, chain) => {
             const params = (0, params_extractor_1.extractReplaceParams)(chain);
             return (0, ts_replace_1.renderTsGet)(name, { keyExpr: composeKey(String(path)), params });
         });
         // element access with string literal '...'
-        s = s.replace(new RegExp(`this\.${name}\.([A-Za-z0-9_.]+)\\s*\\[\\s*'([^']+)'\\s*\\]`, 'g'), (_m, base, lit) => {
+        s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)\\s*\\[\\s*'([^']+)'\\s*\\]`, 'g'), (_m, base, lit) => {
             return (0, ts_replace_1.renderTsGet)(name, { keyExpr: composeKey(`${String(base)}.${String(lit)}`) });
         });
         // element access with string literal "..."
-        s = s.replace(new RegExp(`this\.${name}\.([A-Za-z0-9_.]+)\\s*\\[\\s*\"([^\"]+)\"\\s*\\]`, 'g'), (_m, base, lit) => {
+        s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)\\s*\\[\\s*\"([^\"]+)\"\\s*\\]`, 'g'), (_m, base, lit) => {
             return (0, ts_replace_1.renderTsGet)(name, { keyExpr: composeKey(`${String(base)}.${String(lit)}`) });
         });
         // dynamic element access [expr]
-        s = s.replace(new RegExp(`this\.${name}\.([A-Za-z0-9_.]+)\\s*\\[([^\\]]+)\\]`, 'g'), (_m, base, expr) => {
+        s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)\\s*\\[([^\\]]+)\\]`, 'g'), (_m, base, expr) => {
             const basePath = composeKey(String(base));
             return (0, ts_replace_1.renderTsGet)(name, { keyExpr: `'${basePath}.' + ${String(expr).trim()}` });
         });
-        // plain property chain (not followed by call/replace/[ or assignment)
-        s = s.replace(new RegExp(`(^|[\\s,(])this\.${name}\.([A-Za-z0-9_.]+)(?!\\s*\\(|\\s*\\.replace|\\s*\\[|\\s*=)`, 'g'), (_m, pre, path) => {
-            return `${pre}${(0, ts_replace_1.renderTsGet)(name, { keyExpr: composeKey(String(path)) })}`;
+    }
+    // Fallback: plain property chains not followed by call/replace/[ or assignment
+    for (const a of aliases) {
+        const name = a.name;
+        const composeKey = (path) => {
+            if (a.prefix)
+                return `${a.prefix}.${path}`;
+            if (a.roots && a.roots.length) {
+                const r = (0, dict_reader_1.pickRoot)(a.roots, path);
+                return r ? `${r}.${path}` : path;
+            }
+            return path;
+        };
+        s = s.replace(new RegExp(`this\\.${name}\\.(?!get\\b)([A-Za-z0-9_.]+)(?!\\s*\\(|\\s*\\.replace|\\s*\\[|\\s*=)`, 'g'), (_m, path) => {
+            return (0, ts_replace_1.renderTsGet)(name, { keyExpr: composeKey(String(path)) });
         });
     }
     return s;
@@ -208,12 +271,12 @@ function processTsFile(tsPath) {
             after = after.replace(new RegExp(`\\b${a.name}\\s*:\\s*any\\s*;`, 'g'), '');
         }
     }
-    // normalize constructor to inject I18nService
+    // normalize constructor to inject I18nLocaleService as i18n
     after = after.replace(/constructor\s*\(([^)]*)\)/, (m, params) => {
         let p = params;
-        p = p.replace(/\b(private|public)?\s*locale\s*:\s*I18nLocaleService\b/, 'public i18n: I18nService');
-        if (!/I18nService\b/.test(p)) {
-            p = (p.trim().length ? p + ', ' : '') + 'public i18n: I18nService';
+        p = p.replace(/\b(private|public)?\s*locale\s*:\s*I18nLocaleService\b/, 'public i18n: I18nLocaleService');
+        if (!/\bi18n\s*:\s*I18nLocaleService\b/.test(p)) {
+            p = (p.trim().length ? p + ', ' : '') + 'public i18n: I18nLocaleService';
         }
         return `constructor(${p})`;
     });

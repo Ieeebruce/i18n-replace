@@ -151,9 +151,9 @@ function processComponent(tsCode, htmlCode) {
     // 规范化构造函数注入 I18nService
     tsOut = tsOut.replace(/constructor\s*\(([^)]*)\)/, (m, params) => {
         let p = params; // 参数文本
-        p = p.replace(/\b(private|public)?\s*locale\s*:\s*I18nLocaleService\b/, 'public i18n: I18nService'); // 替换旧依赖
-        if (!/I18nService\b/.test(p)) { // 若不存在则追加
-            p = (p.trim().length ? p + ', ' : '') + 'public i18n: I18nService';
+        p = p.replace(/\b(private|public)?\s*locale\s*:\s*I18nLocaleService\b/, 'public i18n: I18nLocaleService'); // 替换旧依赖
+        if (!/I18nLocaleService\b/.test(p) || !/\bi18n\s*:\s*I18nLocaleService\b/.test(p)) { // 若不存在则追加
+            p = (p.trim().length ? p + ', ' : '') + 'public i18n: I18nLocaleService';
         }
         return `constructor(${p})`; // 返回构造函数头
     });

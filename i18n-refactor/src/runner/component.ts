@@ -4,6 +4,7 @@ import { extractReplaceParams } from '../core/params-extractor' // 导入 replac
 import { renderTsGet } from '../replace/ts-replace' // 导入 TS 调用渲染器
 import { pruneUnused } from '../replace/prune' // 导入无用声明清理器
 import { pickRoot } from '../util/dict-reader' // 导入字典根选择工具
+import { resolveKeyFromAccess } from '../core/key-resolver'
 
 function collectGetLocaleVars(code: string): string[] { // 收集通过 getLocale/getLocal 赋值的别名变量
   const names = new Set<string>() // 结果集合
@@ -39,50 +40,77 @@ function buildAliases(code: string): AliasInfo[] { // 从 TS 字符串中构建�
 }
 
 function replaceTs(src: string): string { // 将 TS 中的对象访问统一替换为 this.<alias>.get(...)
-  let s = src // 工作副本
-  const aliases = buildAliases(src) // 构建别名列表
-  const composeKey = (ai: AliasInfo, path: string) => { // 组合最终 key（考虑前缀/根）
-    if (ai.prefix) { // 前缀别名：this.<alias>=getLocale().x.y
-      const rootFirst = ai.prefix.split('.')[0] // 前缀首段根
-      if (path.startsWith(rootFirst + '.')) path = path.slice(rootFirst.length + 1) // 去重根段
-      return `${ai.prefix}.${path}` // 拼接前缀
+  let s = src
+  const aliases = buildAliases(src)
+  const sfAst = ts.createSourceFile('x.ts', s, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  type Rep = { s: number; e: number; text: string }
+  const reps: Rep[] = []
+  const seen = new Set<string>()
+  const info = new Map<string, AliasInfo>()
+  for (const a of aliases) info.set(a.name, a)
+  const printer = ts.createPrinter()
+  const getAliasName = (expr: ts.Expression): string | null => {
+    let cur: ts.Expression = expr
+    while (ts.isPropertyAccessExpression(cur) || ts.isElementAccessExpression(cur)) {
+      if (ts.isPropertyAccessExpression(cur) && cur.expression.kind === ts.SyntaxKind.ThisKeyword && ts.isIdentifier(cur.name)) {
+        return cur.name.text
+      }
+      cur = cur.expression as ts.Expression
     }
-    if (ai.roots && ai.roots.length) { // 合并来源别名：按 roots 选根
-      const r = pickRoot(ai.roots, path) // 动态选根
-      return r ? `${r}.${path}` : path // 命中则加根
-    }
-    if (ai.name === 'i18n') { // 普通 i18n 别名：尝试按常见根选择
-      const seg0 = path.split('.')[0] // 首段
-      const candidates = ['common', 'app', 'home'] // 候选根
-      if (candidates.includes(seg0)) return path // 已含根则原样返回
-      const r = pickRoot(candidates, path) // 动态选根
-      return r ? `${r}.${path}` : path // 返回组合
-    }
-    return path // 无前缀与根：原样
+    return null
   }
-  for (const ai of aliases) { // 遍历别名进行替换
-    const name = ai.name // 别名名
-    s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)((?:\\.replace\\([^)]*\\))+)`, 'g'), (_m, path, chain) => { // 链式 replace
-      const params = extractReplaceParams(chain) // 提取参数
-      return renderTsGet(name, { keyExpr: composeKey(ai, String(path)), params }) // 渲染 get 调用
-    })
-    s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)\\s*\\[\\s*'([^']+)'\\s*\\]`, 'g'), (_m, base, lit) => { // 索引字面量 '...'
-      const path = `${String(base)}.${String(lit)}` // 拼接路径
-      return renderTsGet(name, { keyExpr: composeKey(ai, path) }) // 渲染
-    })
-    s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)\\s*\\[\\s*\"([^\"]+)\"\\s*\\]`, 'g'), (_m, base, lit) => { // 索引字面量 "..."
-      const path = `${String(base)}.${String(lit)}` // 拼接路径
-      return renderTsGet(name, { keyExpr: composeKey(ai, path) }) // 渲染
-    })
-    s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)\\s*\\[([^\\]]+)\\]`, 'g'), (_m, base, expr) => { // 动态索引 [expr]
-      const basePath = composeKey(ai, String(base)) // 基路径
-      return renderTsGet(name, { keyExpr: `'${basePath}.' + ${String(expr).trim()}` }) // 拼接表达式
-    })
-    s = s.replace(new RegExp(`this\\.${name}\\.(?!get\\b)([A-Za-z0-9_.]+)(?!\\s*\\(|\\s*\\.replace|\\s*\\[|\\s*=)`, 'g'), (_m, path) => { // 普通属性链
-      return renderTsGet(name, { keyExpr: composeKey(ai, String(path)) }) // 渲染
-    })
+  const visitAst = (node: ts.Node) => {
+    if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
+      let outer: ts.Expression = node as ts.Expression
+      while ((ts.isPropertyAccessExpression(outer.parent) && outer.parent.expression === outer) || (ts.isElementAccessExpression(outer.parent) && outer.parent.expression === outer)) {
+        outer = outer.parent as ts.Expression
+      }
+      const aliasName = getAliasName(outer)
+      if (aliasName && info.has(aliasName)) {
+        const ai = info.get(aliasName)!
+        const p = outer.parent
+        const isCall = ts.isCallExpression(p) && p.expression === outer
+        const isAssignLHS = ts.isBinaryExpression(p) && p.left === outer
+        const isReplaceChain = ts.isPropertyAccessExpression(p) && p.name.getText(sfAst) === 'replace'
+        if (!isCall && !isAssignLHS && !isReplaceChain) {
+          const res = resolveKeyFromAccess(sfAst, outer as ts.Expression, ai.prefix || null, ai.roots || [])
+          const text = renderTsGet(aliasName, res)
+          const key = `${outer.getStart(sfAst)}:${outer.getEnd()}`
+          if (!seen.has(key)) { reps.push({ s: outer.getStart(sfAst), e: outer.getEnd(), text }); seen.add(key) }
+        }
+      }
+    }
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.getText(sfAst) === 'replace') {
+      const calls: ts.CallExpression[] = []
+      let cur: ts.Expression = node as ts.Expression
+      while (ts.isCallExpression(cur) && ts.isPropertyAccessExpression(cur.expression) && cur.expression.name.getText(sfAst) === 'replace') {
+        calls.unshift(cur)
+        cur = cur.expression.expression
+      }
+      const base = cur
+      const aliasName = getAliasName(base)
+      if (aliasName && info.has(aliasName)) {
+        const ai = info.get(aliasName)!
+        const res = resolveKeyFromAccess(sfAst, base as ts.Expression, ai.prefix || null, ai.roots || [])
+        const params: Record<string, string> = {}
+        for (const c of calls) {
+          const [a0, a1] = c.arguments
+          if (a0 && ts.isStringLiteral(a0) && a1) {
+            const m = a0.text.match(/^\{([^}]+)\}$/)
+            const key = m ? m[1] : a0.text
+            params[key] = printer.printNode(ts.EmitHint.Unspecified, a1, sfAst)
+          }
+        }
+        const text = renderTsGet(aliasName, { keyExpr: res.keyExpr, params })
+        const key = `${(base as ts.Expression).getStart(sfAst)}:${(node as ts.Expression).getEnd()}`
+        if (!seen.has(key)) { reps.push({ s: (base as ts.Expression).getStart(sfAst), e: (node as ts.Expression).getEnd(), text }); seen.add(key) }
+      }
+    }
+    ts.forEachChild(node, visitAst)
   }
-  return s // 返回替换后的代码
+  visitAst(sfAst)
+  if (reps.length) { reps.sort((a, b) => b.s - a.s); for (const r of reps) s = s.slice(0, r.s) + r.text + s.slice(r.e) }
+  return s
 }
 
 function replaceHtml(src: string, aliases: AliasInfo[]): string { // 将模板插值统一替换为 i18n 管道
@@ -138,9 +166,9 @@ export function processComponent(tsCode: string, htmlCode: string): { tsOut: str
   // 规范化构造函数注入 I18nService
   tsOut = tsOut.replace(/constructor\s*\(([^)]*)\)/, (m, params) => { // 重写构造签名
     let p = params // 参数文本
-    p = p.replace(/\b(private|public)?\s*locale\s*:\s*I18nLocaleService\b/, 'public i18n: I18nService') // 替换旧依赖
-    if (!/I18nService\b/.test(p)) { // 若不存在则追加
-      p = (p.trim().length ? p + ', ' : '') + 'public i18n: I18nService'
+    p = p.replace(/\b(private|public)?\s*locale\s*:\s*I18nLocaleService\b/, 'public i18n: I18nLocaleService') // 替换旧依赖
+    if (!/I18nLocaleService\b/.test(p) || !/\bi18n\s*:\s*I18nLocaleService\b/.test(p)) { // 若不存在则追加
+      p = (p.trim().length ? p + ', ' : '') + 'public i18n: I18nLocaleService'
     }
     return `constructor(${p})` // 返回构造函数头
   })

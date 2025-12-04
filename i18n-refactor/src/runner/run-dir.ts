@@ -125,6 +125,48 @@ function buildAliases(tsCode: string): Array<{ name: string; prefix: string | nu
 function replaceTsContent(src: string): string {
   let s = src
   const aliases = buildAliases(src)
+  // AST-based replacement for plain property chains this.<alias>.<path>
+  const sfAst = ts.createSourceFile('x.ts', s, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  type Rep = { s: number; e: number; text: string }
+  const reps: Rep[] = []
+  const info = new Map<string, { prefix: string | null; roots?: string[] }>()
+  for (const a of aliases) info.set(a.name, { prefix: a.prefix, roots: a.roots })
+  const composeAstKey = (a: { prefix: string | null; roots?: string[] }, path: string) => {
+    if (a.prefix) return `${a.prefix}.${path}`
+    if (a.roots && a.roots.length) { const r = pickRoot(a.roots, path); return r ? `${r}.${path}` : path }
+    return path
+  }
+  const visitAst = (node: ts.Node) => {
+    if (ts.isPropertyAccessExpression(node)) {
+      let outer: ts.PropertyAccessExpression = node
+      while (ts.isPropertyAccessExpression(outer.parent) && outer.parent.expression === outer) outer = outer.parent
+      let cur: ts.Expression = outer
+      const segs: string[] = []
+      while (ts.isPropertyAccessExpression(cur)) { segs.unshift(cur.name.getText(sfAst)); cur = cur.expression }
+      if (ts.isPropertyAccessExpression(cur) && cur.expression.kind === ts.SyntaxKind.ThisKeyword && ts.isIdentifier(cur.name)) {
+        const aliasName = cur.name.getText(sfAst)
+        const ai = info.get(aliasName)
+        if (ai) {
+          const p = outer.parent
+          const isCall = ts.isCallExpression(p) && p.expression === outer
+          const isEl = ts.isElementAccessExpression(p) && p.expression === outer
+          const isAssignLHS = ts.isBinaryExpression(p) && p.left === outer
+          const isReplaceChain = ts.isPropertyAccessExpression(p) && p.name.getText(sfAst) === 'replace'
+          if (!isCall && !isEl && !isAssignLHS && !isReplaceChain) {
+            const path = segs.join('.')
+            const text = renderTsGet(aliasName, { keyExpr: composeAstKey(ai, path) })
+            reps.push({ s: outer.getStart(sfAst), e: outer.getEnd(), text })
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, visitAst)
+  }
+  visitAst(sfAst)
+  if (reps.length) {
+    reps.sort((a, b) => b.s - a.s)
+    for (const r of reps) s = s.slice(0, r.s) + r.text + s.slice(r.e)
+  }
   for (const a of aliases) {
     const name = a.name
     const composeKey = (path: string) => {
@@ -136,27 +178,35 @@ function replaceTsContent(src: string): string {
       return path
     }
     // chain .replace()
-  s = s.replace(new RegExp(`this\.${name}\.([A-Za-z0-9_.]+)((?:\\.replace\\([^)]*\\))+)`, 'g'), (_m, path, chain) => {
+  s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)((?:\\.replace\\([^)]*\\))+)`, 'g'), (_m, path, chain) => {
     const params = extractReplaceParams(chain)
     return renderTsGet(name, { keyExpr: composeKey(String(path)), params })
   })
     // element access with string literal '...'
-  s = s.replace(new RegExp(`this\.${name}\.([A-Za-z0-9_.]+)\\s*\\[\\s*'([^']+)'\\s*\\]`, 'g'), (_m, base, lit) => {
+  s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)\\s*\\[\\s*'([^']+)'\\s*\\]`, 'g'), (_m, base, lit) => {
     return renderTsGet(name, { keyExpr: composeKey(`${String(base)}.${String(lit)}`) })
   })
     // element access with string literal "..."
-  s = s.replace(new RegExp(`this\.${name}\.([A-Za-z0-9_.]+)\\s*\\[\\s*\"([^\"]+)\"\\s*\\]`, 'g'), (_m, base, lit) => {
+  s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)\\s*\\[\\s*\"([^\"]+)\"\\s*\\]`, 'g'), (_m, base, lit) => {
     return renderTsGet(name, { keyExpr: composeKey(`${String(base)}.${String(lit)}`) })
   })
     // dynamic element access [expr]
-  s = s.replace(new RegExp(`this\.${name}\.([A-Za-z0-9_.]+)\\s*\\[([^\\]]+)\\]`, 'g'), (_m, base, expr) => {
+  s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)\\s*\\[([^\\]]+)\\]`, 'g'), (_m, base, expr) => {
     const basePath = composeKey(String(base))
     return renderTsGet(name, { keyExpr: `'${basePath}.' + ${String(expr).trim()}` })
   })
-    // plain property chain (not followed by call/replace/[ or assignment)
-  s = s.replace(new RegExp(`(^|[\\s,(])this\.${name}\.([A-Za-z0-9_.]+)(?!\\s*\\(|\\s*\\.replace|\\s*\\[|\\s*=)`, 'g'), (_m, pre, path) => {
-    return `${pre}${renderTsGet(name, { keyExpr: composeKey(String(path)) })}`
-  })
+  }
+  // Fallback: plain property chains not followed by call/replace/[ or assignment
+  for (const a of aliases) {
+    const name = a.name
+    const composeKey = (path: string) => {
+      if (a.prefix) return `${a.prefix}.${path}`
+      if (a.roots && a.roots.length) { const r = pickRoot(a.roots, path); return r ? `${r}.${path}` : path }
+      return path
+    }
+    s = s.replace(new RegExp(`this\\.${name}\\.(?!get\\b)([A-Za-z0-9_.]+)(?!\\s*\\(|\\s*\\.replace|\\s*\\[|\\s*=)`, 'g'), (_m, path) => {
+      return renderTsGet(name, { keyExpr: composeKey(String(path)) })
+    })
   }
   return s
 }
@@ -174,12 +224,12 @@ function processTsFile(tsPath: string): { changed: boolean; code: string; aliase
       after = after.replace(new RegExp(`\\b${a.name}\\s*:\\s*any\\s*;`, 'g'), '')
     }
   }
-  // normalize constructor to inject I18nService
+  // normalize constructor to inject I18nLocaleService as i18n
   after = after.replace(/constructor\s*\(([^)]*)\)/, (m, params) => {
     let p = params
-    p = p.replace(/\b(private|public)?\s*locale\s*:\s*I18nLocaleService\b/, 'public i18n: I18nService')
-    if (!/I18nService\b/.test(p)) {
-      p = (p.trim().length ? p + ', ' : '') + 'public i18n: I18nService'
+    p = p.replace(/\b(private|public)?\s*locale\s*:\s*I18nLocaleService\b/, 'public i18n: I18nLocaleService')
+    if (!/\bi18n\s*:\s*I18nLocaleService\b/.test(p)) {
+      p = (p.trim().length ? p + ', ' : '') + 'public i18n: I18nLocaleService'
     }
     return `constructor(${p})`
   })

@@ -6,6 +6,6 @@ test('prune getLocale assignments and any declarations', () => {
   const out = processComponent(ts, html)
   expect(out.tsOut).not.toMatch(/local\s*:\s*any\s*;/)
   expect(out.tsOut).not.toMatch(/this\.i18n\s*=\s*[^;]*getLocale/)
-  expect(out.tsOut).toContain(`this.i18n.get('app.common.title')`)
+  expect(out.tsOut).toContain(`this.i18n.get('app.common.app.title')`)
   expect(out.htmlOut).toContain(`{{ 'app.title' | i18n }}`)
 })

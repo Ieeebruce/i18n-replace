@@ -2,13 +2,14 @@
   "name": "i18n-demo",
   "version": "0.0.0",
   "bin": {
-    "i18n-refactor": "./i18n-refactor/dist/src/runner/run-dir.js"
+    "i18n-refactor": "./bin/i18n-refactor.js"
   },
   "scripts": {
     "start": "ng serve",
     "refactor:test": "node node_modules/jest/bin/jest.js --colors",
     "i18n-refactor:build": "node node_modules/typescript/bin/tsc -p i18n-refactor/tsconfig.json",
-    "i18n-refactor:run": "npm run i18n-refactor:build && node i18n-refactor/dist/src/runner/run-dir.js --dir=src"
+    "i18n-refactor:run": "npm run i18n-refactor:build && node i18n-refactor/dist/src/runner/run-dir.js --dir=src",
+    "i18n-refactor": "npm run i18n-refactor:build && node ./bin/i18n-refactor.js"
   },
   "private": true,
   "dependencies": {
