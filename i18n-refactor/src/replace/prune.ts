@@ -1,17 +1,48 @@
-import ts from 'typescript' // 引入 TypeScript 类型定义，仅用于类型标注
+import ts from 'typescript'
 
-export function pruneUnused(sf: ts.SourceFile, code: string, varNames: string[]): string {
-  let out = code // 从原始代码复制开始
-  for (const v of varNames) { // 遍历待清理的变量名
-    const reAssign = new RegExp('this\\.' + v + '\\s*=\\s*[^;]*\\.' + '(?:getLocal|getLocale)' + '\\([^)]*\\)(?:\\.[A-Za-z0-9_.]+)?\\s*;', 'g')
-    const reDeclTyped = new RegExp(`\\b${v}\\s*:\\s*[^;]+;`, 'g')
-    const reDeclBare = new RegExp(`\\b${v}\\s*;`, 'g')
-    out = out.replace(reAssign, '') // 删除 getLocal 赋值语句
-    out = out.replace(reDeclTyped, '') // 删除带类型的声明
-    out = out.replace(reDeclBare, '') // 删除仅声明语句
-    out = out.replace(new RegExp(`\\b${v}\\s*:\\s*any\\s*;`, 'g'), '')
-  } // 结束变量遍历
-  out = out.replace(/\\blocal\\s*:\\s*any\\s*;/g, '')
-  out = out.replace(/this\\.[A-Za-z_]\\w*\\s*=\\s*[^;]*\\.(?:getLocal|getLocale)\\([^)]*\\)(?:\\.[A-Za-z0-9_.]+)?\\s*;?/g, '')
-  return out // 返回清理后的代码
-} // 函数结束
+export function pruneUnused(_sf: ts.SourceFile, code: string, varNames: string[]): string {
+  const file = ts.createSourceFile('x.ts', code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  const del: Array<{ s: number; e: number }> = []
+  const set = new Set(varNames)
+  const hasGetLocaleCall = (node: ts.Node): boolean => {
+    let hit = false
+    const walk = (n: ts.Node) => {
+      if (hit) return
+      if (ts.isCallExpression(n)) {
+        const ex = n.expression
+        if (ts.isPropertyAccessExpression(ex)) {
+          const nm = ex.name.getText(file)
+          if (nm === 'getLocale' || nm === 'getLocal') { hit = true; return }
+        }
+      }
+      ts.forEachChild(n, walk)
+    }
+    walk(node)
+    return hit
+  }
+  const visit = (node: ts.Node) => {
+    if (ts.isPropertyDeclaration(node)) {
+      const id = ts.isIdentifier(node.name) ? node.name.text : ''
+      if (id && set.has(id)) del.push({ s: node.getStart(file), e: node.getEnd() })
+    }
+    if (ts.isExpressionStatement(node)) {
+      const be = node.expression
+      if (ts.isBinaryExpression(be) && be.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+        const left = be.left
+        if (ts.isPropertyAccessExpression(left) && left.expression.kind === ts.SyntaxKind.ThisKeyword) {
+          const id = left.name.getText(file)
+          if (set.has(id) && hasGetLocaleCall(be.right)) del.push({ s: node.getStart(file), e: node.getEnd() })
+        }
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(file)
+  if (!del.length) return code
+  del.sort((a, b) => a.s - b.s)
+  let out = ''
+  let last = 0
+  for (const r of del) { out += code.slice(last, r.s); last = r.e }
+  out += code.slice(last)
+  return out
+}
