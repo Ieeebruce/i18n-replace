@@ -5,13 +5,7 @@
     "i18n-refactor": "./i18n-refactor/dist/src/runner/run-dir.js"
   },
   "scripts": {
-    "ng": "ng",
     "start": "ng serve",
-    "build": "ng build",
-    "watch": "ng build --watch --configuration development",
-    "test": "ng test",
-    "build:scripts": "tsc -p scripts/tsconfig.json",
-    "test:ast": "npm run build:scripts && node scripts/dist/utils/ast.spec.js",
     "refactor:test": "node node_modules/jest/bin/jest.js --colors",
     "i18n-refactor:build": "node node_modules/typescript/bin/tsc -p i18n-refactor/tsconfig.json",
     "i18n-refactor:run": "npm run i18n-refactor:build && node i18n-refactor/dist/src/runner/run-dir.js --dir=src"

@@ -8,23 +8,38 @@
 <!-- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * -->
 
 
+<section class="layout">
+  <aside class="sidebar">
+    <h3 class="menu-title">{{ i18n.app.title }}</h3>
+    <nav class="menu">
+      <a [routerLink]="['/']" routerLinkActive="active">Home</a>
+      <a [routerLink]="['/alias']" routerLinkActive="active">Alias</a>
+      <a [routerLink]="['/service']" routerLinkActive="active">Service</a>
+      <a [routerLink]="['/todo']" routerLinkActive="active">Todo</a>
+    </nav>
+    <div class="menu-actions">
+      <button class="pill" (click)="switch('zh')">{{ i18n.app.switchToZh }}</button>
+      <button class="pill" (click)="switch('en')">{{ i18n.app.switchToEn }}</button>
+    </div>
+  </aside>
+  <section class="page">
 <main class="main">
   <section class="section-pad">
-    <h1>{{ 'app.title' | i18n }}</h1>
-    <p class="mt-075">{{ 'app.description' | i18n }}</p>
+    <h1>{{ i18n.app.title }}</h1>
+    <p class="mt-075">{{ i18n.app.description }}</p>
     <div class="actions">
-      <button class="pill" (click)="switch('zh')">{{ 'app.switchToZh' | i18n }}</button>
-      <button class="pill" (click)="switch('en')">{{ 'app.switchToEn' | i18n }}</button>
+      <button class="pill" (click)="switch('zh')">{{ i18n.app.switchToZh }}</button>
+      <button class="pill" (click)="switch('en')">{{ i18n.app.switchToEn }}</button>
     </div>
-    <p class="mt-1">{{ 'home.welcome' | i18n }}</p>
+    <p class="mt-1">{{ i18n.home.welcome }}</p>
 
     <h2 class="mt-2">模板替换</h2>
-    <p>{{ 'templates.info' | i18n: {"name":"'张三'","count":"'3'"} }}</p>
-    <p>{{ 'user.greetTpl' | i18n: {"name":"'李四'"} }}</p>
+    <p>{{ i18n.templates.info.replace('{name}', '张三').replace('{count}', '3') }}</p>
+    <p>{{ i18n.user.greetTpl.replace('{name}', '李四') }}</p>
 
     <h2 class="mt-2">数组词条</h2>
     <ul>
-      <li *ngFor="let it of i18n.list.items; let i=index">{{ 'templates.itemTpl' | i18n: {"index":"i","value":"it"} }}</li>
+      <li *ngFor="let it of i18n.list.items; let i=index">{{ i18n.templates.itemTpl.replace('{index}', i).replace('{value}', it) }}</li>
     </ul>
     <router-outlet></router-outlet>
   </section>
@@ -94,7 +109,7 @@
             target="_blank"
             rel="noopener"
           >
-            <span>{{ 'title' | i18n }}</span>
+            <span>{{ i18n.title }}</span>
             <svg
               xmlns="http://www.w3.org/2000/svg"
               height="14"
@@ -173,6 +188,8 @@
     </div>
   </div>
 </main>
+  </section>
+</section>
 
 <!-- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * -->
 <!-- * * * * * * * * * * * The content above * * * * * * * * * * * * -->

@@ -1,0 +1,19 @@
+<section class="layout">
+  <aside class="sidebar">
+    <h3 class="menu-title">{{ 'app.title' | i18n }}</h3>
+    <nav class="menu">
+      <a [routerLink]="['/']" routerLinkActive="active">Home</a>
+      <a [routerLink]="['/alias']" routerLinkActive="active">Alias</a>
+      <a [routerLink]="['/service']" routerLinkActive="active">Service</a>
+      <a [routerLink]="['/todo']" routerLinkActive="active">Todo</a>
+    </nav>
+    <div class="menu-actions">
+      <button class="pill" (click)="switch('zh')">{{ 'app.switchToZh' | i18n }}</button>
+      <button class="pill" (click)="switch('en')">{{ 'app.switchToEn' | i18n }}</button>
+    </div>
+  </aside>
+  <section class="page">
+    <router-outlet></router-outlet>
+  </section>
+</section>
+

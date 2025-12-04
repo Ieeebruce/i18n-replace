@@ -187,3 +187,12 @@ main {
 .mt-2 {
   margin-top: 2rem;
 }
+
+.layout { display: flex; min-height: 100vh }
+.sidebar { width: 220px; padding: 1rem; border-right: 1px solid var(--gray-400) }
+.menu-title { font-size: 1rem; margin: 0 0 0.75rem 0 }
+.menu { display: flex; flex-direction: column; gap: 0.5rem }
+.menu a { text-decoration: none; color: var(--gray-900); padding: 0.25rem 0.25rem; border-radius: 6px }
+.menu a.active { background: color-mix(in srgb, var(--pill-accent) 5%, transparent) }
+.menu-actions { margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap }
+.page { flex: 1; padding: 1rem }

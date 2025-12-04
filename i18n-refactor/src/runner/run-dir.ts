@@ -169,8 +169,8 @@ function replaceTsContent(src: string): string {
 function processTsFile(tsPath: string): { changed: boolean; code: string; aliases: string[]; htmlPath: string | null } {
   const before = readFile(tsPath)
   const varNames = collectGetLocalVars(before)
-  let after = pruneUnused({} as any, before, varNames)
-  after = replaceTsContent(after)
+  let after = replaceTsContent(before)
+  after = pruneUnused({} as any, after, varNames)
   // unify alias get-calls to this.i18n.get
   const aliasInfos = buildAliases(after)
   for (const a of aliasInfos) {
