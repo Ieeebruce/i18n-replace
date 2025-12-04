@@ -24,21 +24,29 @@ function chainAfterGetLocal(sf: ts.SourceFile, expr: ts.Expression): string[] { 
 }
 
 export function collectVarAliases(sf: ts.SourceFile, serviceParamName: string, getLocalMethod: string): VarAlias[] { // 收集别名：前缀与根来源
+  // console.log('collectVarAliases start', serviceParamName, getLocalMethod)
   const out = new Map<string, VarAlias>() // 存储结果映射
   function addAlias(name: string): VarAlias { // 获取或创建别名记录
+    // console.log('addAlias', name)
     if (!out.has(name)) out.set(name, { name, prefix: null, roots: [] }) // 初始化
     return out.get(name)! // 返回记录
   }
   function visit(node: ts.Node) { // AST 访问
-    if (ts.isPropertyDeclaration(node) && node.initializer && ts.isPropertyAccessExpression(node.initializer)) { // 属性初始化为访问表达式
-      const base = node.initializer // 基本表达式
-      let cur: ts.Expression = base // 当前表达式
-      while (ts.isPropertyAccessExpression(cur)) cur = cur.expression // 上溯到调用
-      if (ts.isCallExpression(cur) && isGetLocalCall(sf, cur, serviceParamName, getLocalMethod)) { // 是 getLocal 调用
-        const segs = chainAfterGetLocal(sf, base) // 提取链
-        if (node.name && ts.isIdentifier(node.name)) { // 属性名标识符
-          const a = addAlias(node.name.getText(sf)) // 别名记录
-          a.prefix = segs.join('.') // 设置前缀
+    if (ts.isPropertyDeclaration(node) && node.initializer) {
+      if (ts.isPropertyAccessExpression(node.initializer)) { // 属性初始化为访问表达式
+        const base = node.initializer // 基本表达式
+        let cur: ts.Expression = base // 当前表达式
+        while (ts.isPropertyAccessExpression(cur)) cur = cur.expression // 上溯到调用
+        if (ts.isCallExpression(cur) && isGetLocalCall(sf, cur, serviceParamName, getLocalMethod)) { // 是 getLocal 调用
+          const segs = chainAfterGetLocal(sf, base) // 提取链
+          if (node.name && ts.isIdentifier(node.name)) { // 属性名标识符
+            const a = addAlias(node.name.getText(sf)) // 别名记录
+            a.prefix = segs.join('.') // 设置前缀
+          }
+        }
+      } else if (ts.isCallExpression(node.initializer) && isGetLocalCall(sf, node.initializer, serviceParamName, getLocalMethod)) {
+        if (node.name && ts.isIdentifier(node.name)) {
+          addAlias(node.name.getText(sf))
         }
       }
     }
@@ -77,7 +85,27 @@ export function collectVarAliases(sf: ts.SourceFile, serviceParamName: string, g
                   const segs = chainAfterGetLocal(sf, base) // 链
                   const a = addAlias(nm) // 别名记录
                   a.prefix = segs.join('.') // 设置前缀
+                } else {
+                  let temp: ts.Expression = base
+                  while (ts.isPropertyAccessExpression(temp)) {
+                    if (temp.expression.kind === ts.SyntaxKind.ThisKeyword && ts.isIdentifier(temp.name)) {
+                      const otherName = temp.name.getText(sf)
+                      if (out.has(otherName)) {
+                        const other = out.get(otherName)!
+                        const segs = chainAfterGetLocal(sf, base)
+                        if (segs.length && segs[0] === otherName) segs.shift()
+                        const a = addAlias(nm)
+                        if (other.prefix) a.prefix = [other.prefix, ...segs].join('.')
+                        else a.prefix = segs.join('.')
+                        if (other.roots) a.roots = other.roots
+                        break
+                      }
+                    }
+                    temp = temp.expression
+                  }
                 }
+              } else if (ts.isCallExpression(be.right) && isGetLocalCall(sf, be.right, serviceParamName, getLocalMethod)) {
+                addAlias(nm)
               }
               if (ts.isObjectLiteralExpression(be.right)) { // 右侧为对象字面量（合并）
                 const spreads = be.right.properties.filter(p => ts.isSpreadAssignment(p)) as ts.SpreadAssignment[] // 展开项

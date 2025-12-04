@@ -151,12 +151,12 @@ function replaceHtml(src: string, aliases: AliasInfo[]): string { // 将模板�
 }
 
 export function processComponent(tsCode: string, htmlCode: string): { tsOut: string, htmlOut: string } { // 编排组件：TS 与 HTML 一致替换
-  const varNames = collectGetLocaleVars(tsCode) // 收集待清理别名
+  const aliasInfos = buildAliases(tsCode) // 基于原始 TS 构建别名
+  const varNames = aliasInfos.map(a => a.name) // 收集所有别名变量名
   let tsOut = replaceTs(tsCode) // 统一 TS 访问形态（在清理前以保留别名根信息）
   tsOut = pruneUnused({} as any, tsOut, varNames) // 清理无用赋值/声明
   tsOut = tsOut.replace(/this\.[A-Za-z_]\w*\s*=\s*[^;]*\.(?:getLocal|getLocale)\([^)]*\)(?:\.[A-Za-z0-9_.]+)?\s*;?/g, '') // 移除残留赋值
   // 统一别名 get 调用到 this.i18n.get(...)
-  const aliasInfos = buildAliases(tsCode) // 基于原始 TS 构建别名以便统一
   for (const ai of aliasInfos) { // 遍历别名
     if (ai.name !== 'i18n') { // 非 i18n 别名统一指向 this.i18n
       tsOut = tsOut.replace(new RegExp(`this\\.${ai.name}\\\.get(?!Locale)\\s*\\(`, 'g'), 'this.i18n.get(') // 调用替换
