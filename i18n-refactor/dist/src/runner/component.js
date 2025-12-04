@@ -36,13 +36,7 @@ function buildAliases(code) {
         out.push({ name: 'i18n', prefix: null }); // 标记 i18n
     if (/\bdict\s*:\s*/.test(code) || /this\.dict\s*=/.test(code))
         out.push({ name: 'dict', prefix: null }); // 标记 dict
-    const rxAny = /this\.([A-Za-z_]\w*)\./g; // 捕捉其它 this.<name>.
-    let am; // 匹配循环
-    while ((am = rxAny.exec(code))) {
-        const nm = am[1]; // 别名名
-        if (nm !== 'locale')
-            out.push({ name: nm, prefix: null }); // 排除 locale
-    }
+    // 不再将所有 this.<name>. 视为别名，避免误替换普通对象/数组方法
     // 去重：同名保留带前缀者
     const map = new Map(); // 名称到别名映射
     for (const a of out) { // 遍历候选
@@ -147,7 +141,7 @@ function processComponent(tsCode, htmlCode) {
     tsOut = (0, prune_1.pruneUnused)({}, tsOut, varNames); // 清理无用赋值/声明
     tsOut = tsOut.replace(/this\.[A-Za-z_]\w*\s*=\s*[^;]*\.(?:getLocal|getLocale)\([^)]*\)(?:\.[A-Za-z0-9_.]+)?\s*;?/g, ''); // 移除残留赋值
     // 统一别名 get 调用到 this.i18n.get(...)
-    const aliasInfos = buildAliases(tsOut); // 再次构建别名以便统一
+    const aliasInfos = buildAliases(tsCode); // 基于原始 TS 构建别名以便统一
     for (const ai of aliasInfos) { // 遍历别名
         if (ai.name !== 'i18n') { // 非 i18n 别名统一指向 this.i18n
             tsOut = tsOut.replace(new RegExp(`this\\.${ai.name}\\\.get(?!Locale)\\s*\\(`, 'g'), 'this.i18n.get('); // 调用替换

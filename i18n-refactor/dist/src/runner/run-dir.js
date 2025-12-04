@@ -153,13 +153,7 @@ function buildAliases(tsCode) {
         out.push({ name: 'i18n', prefix: null });
     if (/this\.dict\./.test(tsCode) && !out.find(x => x.name === 'dict'))
         out.push({ name: 'dict', prefix: null });
-    const rxAny = /this\.([A-Za-z_]\w*)\./g;
-    let am;
-    while ((am = rxAny.exec(tsCode))) {
-        const nm = am[1];
-        if (nm !== 'locale' && !out.find(x => x.name === nm))
-            out.push({ name: nm, prefix: null });
-    }
+    // 不再将所有 this.<name>. 视为别名，避免误替换普通对象/数组方法
     return Array.from(new Set(out.map(o => JSON.stringify(o)))).map(s => JSON.parse(s));
 }
 function replaceTsContent(src) {
@@ -207,7 +201,7 @@ function processTsFile(tsPath) {
     let after = replaceTsContent(before);
     after = (0, prune_1.pruneUnused)({}, after, varNames);
     // unify alias get-calls to this.i18n.get
-    const aliasInfos = buildAliases(after);
+    const aliasInfos = buildAliases(before);
     for (const a of aliasInfos) {
         if (a.name !== 'i18n') {
             after = after.replace(new RegExp(`this\\.${a.name}\\\.get(?!Locale)\\s*\\(`, 'g'), 'this.i18n.get(');

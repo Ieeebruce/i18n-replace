@@ -118,12 +118,7 @@ function buildAliases(tsCode: string): Array<{ name: string; prefix: string | nu
   while ((m = rx.exec(tsCode))) out.push({ name: m[1], prefix: null })
   if (/this\.i18n\./.test(tsCode) && !out.find(x => x.name === 'i18n')) out.push({ name: 'i18n', prefix: null })
   if (/this\.dict\./.test(tsCode) && !out.find(x => x.name === 'dict')) out.push({ name: 'dict', prefix: null })
-  const rxAny = /this\.([A-Za-z_]\w*)\./g
-  let am: RegExpExecArray | null
-  while ((am = rxAny.exec(tsCode))) {
-    const nm = am[1]
-    if (nm !== 'locale' && !out.find(x => x.name === nm)) out.push({ name: nm, prefix: null })
-  }
+  // 不再将所有 this.<name>. 视为别名，避免误替换普通对象/数组方法
   return Array.from(new Set(out.map(o => JSON.stringify(o)))).map(s => JSON.parse(s))
 }
 
@@ -172,7 +167,7 @@ function processTsFile(tsPath: string): { changed: boolean; code: string; aliase
   let after = replaceTsContent(before)
   after = pruneUnused({} as any, after, varNames)
   // unify alias get-calls to this.i18n.get
-  const aliasInfos = buildAliases(after)
+  const aliasInfos = buildAliases(before)
   for (const a of aliasInfos) {
     if (a.name !== 'i18n') {
       after = after.replace(new RegExp(`this\\.${a.name}\\\.get(?!Locale)\\s*\\(`, 'g'), 'this.i18n.get(')
