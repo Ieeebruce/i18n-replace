@@ -1,0 +1,27 @@
+<section style="padding:1rem">
+  <div style="display:flex; gap:0.5rem">
+  </div>
+
+  <h2>{{ 'app.title' | i18n }}</h2>
+  <p>{{ 'app.description' | i18n }}</p>
+  <p>{{ 'home.welcome' | i18n }}</p>
+
+  <h3>模板替换</h3>
+  <p>{{ 'templates.info' | i18n: {name: '张三', count: '5'} }}</p>
+
+  <h3>数组词条</h3>
+  <ul>
+    <li *ngFor="let key of ['list.items.0', 'list.items.1', 'list.items.2']; let i=index">
+      {{ key | i18n }}
+    </li>
+  </ul>
+
+  <h3>合并覆盖演示</h3>
+  <p>合并后 header（两根均存在，选 app）：{{ 'app.header' | i18n }}</p>
+  <p>合并后 footer（两根均存在，选 app）：{{ 'app.footer' | i18n }}</p>
+  <p>合并后 onlyCommon（仅 common 存在）：{{ 'common.onlyCommon' | i18n }}</p>
+  <p>合并后 onlyApp（仅 app 存在）：{{ 'app.onlyApp' | i18n }}</p>
+  <p>合并后 shared.label（两根均存在，选 app）：{{ 'app.shared.label' | i18n }}</p>
+  <p>合并后 settings.theme（两根均存在，选 app）：{{ 'app.settings.theme' | i18n }}</p>
+  <p>合并后 user.greetTpl 模板：{{ 'app.user.greetTpl' | i18n: {name: '韩梅梅'} }}</p>
+</section>
