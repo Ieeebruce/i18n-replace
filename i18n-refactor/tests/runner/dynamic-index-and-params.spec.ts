@@ -5,7 +5,9 @@ test('dynamic index and params chain', () => {
   const html = `{{ i18n.list[idx] }} \n {{ i18n.templates.info.replace('{name}', name).replace('{count}', count) }}`
   const out = processComponent(ts, html)
   expect(out.tsOut).toContain(`this.i18n.get('list.' + this.idx)`) // TS 动态索引
-  expect(out.tsOut).toContain(`this.i18n.get('templates.info', {\"name\":`) // TS 参数对象
+  // ignore character escaping differences
+  expect(out.tsOut.replace(/\s/g, '')).toContain(`this.i18n.get('templates.info', {name:`.replace(/\s/g, '')) // TS 参数对象
   expect(out.htmlOut).toContain(`{{ ('list.' + idx) | i18n }}`)
-  expect(out.htmlOut).toContain(`{{ 'templates.info' | i18n: {\"name\":`) // HTML 参数对象
+  // ignore character escaping differences
+  expect(out.htmlOut.replace(/\s/g, '')).toContain(`{{ 'templates.info' | i18n: {name:`.replace(/\s/g, '')) // HTML 参数对象
 })

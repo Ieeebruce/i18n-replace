@@ -211,7 +211,7 @@ function replaceTsContent(src: string): string {
   return s
 }
 
-function processTsFile(tsPath: string): { changed: boolean; code: string; aliases: string[]; htmlPath: string | null } {
+export function processTsFile(tsPath: string): { changed: boolean; code: string; aliases: string[]; htmlPath: string | null } {
   const before = readFile(tsPath)
   const varNames = collectGetLocalVars(before)
   let after = replaceTsContent(before)
@@ -228,9 +228,6 @@ function processTsFile(tsPath: string): { changed: boolean; code: string; aliase
   after = after.replace(/constructor\s*\(([^)]*)\)/, (m, params) => {
     let p = params
     p = p.replace(/\b(private|public)?\s*locale\s*:\s*I18nLocaleService\b/, 'public i18n: I18nLocaleService')
-    if (!/\bi18n\s*:\s*I18nLocaleService\b/.test(p)) {
-      p = (p.trim().length ? p + ', ' : '') + 'public i18n: I18nLocaleService'
-    }
     return `constructor(${p})`
   })
   // remove remaining getLocale/getLocal assignments
@@ -326,4 +323,6 @@ function main() { // CLI 主入口
   process.stdout.write(JSON.stringify({ summary, results }, null, 2) + '\n') // 输出 JSON 摘要
 }
 
-main() // 执行主程序
+if (require.main === module) {
+  main() // 执行主程序
+}
