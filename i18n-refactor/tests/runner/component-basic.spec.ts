@@ -44,6 +44,8 @@ test('basic: L alias with simple property', () => {
 }`
   const html = `<h1>{{ L.desc }}</h1>`
   const out = processComponent(ts, html)
+  console.log(out.tsOut)
+  console.log(out.htmlOut)
   expect(out.tsOut).toContain(`this.i18n.get('app.common.desc')`)
   expect(out.htmlOut).toContain(`{{ 'app.common.desc' | i18n }}`)
 })

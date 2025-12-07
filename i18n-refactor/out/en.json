@@ -1,0 +1,31 @@
+{
+  "app.title": "Angular i18n (TS objects) demo",
+  "app.description": "Translations are defined in TypeScript and referenced via objects.",
+  "app.switchToEn": "Switch to English",
+  "app.switchToZh": "切换到中文",
+  "app.footer": "Footer",
+  "app.header": "App header override",
+  "app.onlyApp": "Only in app",
+  "app.common.desc": "App overrides common description",
+  "app.shared.label": "App label override",
+  "app.settings.theme": "App theme",
+  "app.user.greetTpl": "App hi, {name}!",
+  "app.app.desc": "App description",
+  "common.common.title": "Common title",
+  "common.common.desc": "Common description",
+  "common.header": "Common header",
+  "common.footer": "Common footer",
+  "common.onlyCommon": "Only in common",
+  "common.shared.label": "Common label",
+  "common.settings.theme": "Default theme",
+  "common.user.greetTpl": "Hi, {name}!",
+  "home.welcome": "Welcome!",
+  "list.items": [
+    "Item A",
+    "Item B",
+    "Item C"
+  ],
+  "templates.info": "Hello, {name}. You have {count} notifications.",
+  "templates.itemTpl": "Index {index}: {value}",
+  "user.greetTpl": "Hi, {name}!"
+}

@@ -33,6 +33,17 @@ To get more help on the Angular CLI use `ng help` or go check out the [Angular C
 
 ### 构建与运行
 - 构建：`npm run i18n-refactor:build`
+
+#### 1. 准备环境（Bootstrap）
+- 目标：生成 `I18nLocaleService` 与 `I18nPipe`，并在 `app.component.ts` 全局导入 Pipe；同时将 TS 字典导出为 JSON 文件。
+- 命令：
+  - `node i18n-refactor/dist/src/runner/run-dir.js --mode=bootstrap`
+- 效果：
+  - 自动创建 `src/app/i18n/index.ts` (Service) 和 `src/app/i18n/i18n.pipe.ts` (Pipe)。
+  - 自动修改 `src/app/app.component.ts` 导入 `I18nPipe`。
+  - 将 `src/app/i18n/*.ts` 导出为 JSON 到 `i18n-refactor/out/`（路径可配置）。
+
+#### 2. 执行替换（Replace）
 - 快速替换（干运行）：
   - `node i18n-refactor/dist/src/runner/run-dir.js --dir=src --mode=replace --dry-run --logLevel=info --format=pretty`
   - 干运行不会写文件，只打印摘要与每个文件的变更情况。
@@ -43,7 +54,10 @@ To get more help on the Angular CLI use `ng help` or go check out the [Angular C
 
 ### 命令参数
 - `--dir=PATH`：要处理的目录（默认当前工作目录）。
-- `--mode=replace|restore`：替换模式或还原模式（默认 `replace`）。
+- `--mode=replace|restore|bootstrap`：
+  - `bootstrap`: 初始化环境（生成 Service/Pipe、全局导入）并导出 JSON。
+  - `replace`: 执行代码替换（默认）。
+  - `restore`: 还原代码。
 - `--dictDir=PATH`：指定字典目录（覆盖自动探测）。默认会尝试：`src/app/i18n`、`srcbak/app/i18n`。
 - `--dry-run`：干运行，只输出不写文件。
 - `--logLevel=debug|info|warn|error`：日志级别（默认 `info`）。
@@ -57,10 +71,26 @@ To get more help on the Angular CLI use `ng help` or go check out the [Angular C
   "serviceTypeName": "I18nLocaleService",
   "getLocalMethod": "getLocale",
   "fallbackServiceParamName": "locale",
-  "tsGetHelperName": "i18nGet"
+  "tsGetHelperName": "i18nGet",
+  "dictDir": "src/app/i18n",
+  "languages": ["zh", "en"],
+  "jsonOutDir": "i18n-refactor/out",
+  "jsonArrayMode": "nested",
+  "ensureAngular": "fix"
 }
 ```
-- 与默认配置一致时可省略；若项目方法名/注入名不同，按需修改。
+- 基本配置：
+  - `serviceTypeName` 等：与默认配置一致时可省略。
+- 路径与导出配置：
+  - `dictDir`: TS 字典源目录。
+  - `languages`: 要处理的语言列表。
+  - `jsonOutDir`: JSON 导出目录。
+  - `jsonArrayMode`: 数组处理模式。
+    - `"nested"`: 保持数组结构（默认）。
+    - `"flat"`: 展开为对象（如 `list.0: "Item A"`）。
+  - `ensureAngular`: Angular 环境修复策略。
+    - `"fix"`: 自动创建缺失文件并导入（默认）。
+    - `"report"`: 仅报告缺失。
 
 ### 字典目录约定
 - 默认在项目根下查找 `src/app/i18n/zh.ts` 与 `src/app/i18n/en.ts`（也尝试 `srcbak/app/i18n`）。

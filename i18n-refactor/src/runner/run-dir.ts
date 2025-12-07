@@ -11,6 +11,7 @@ import { collectTemplateUsages } from '../core/template-usage'
 import { renderHtmlPipe } from '../replace/html-replace'
 import { config } from '../core/config' // 统一配置
 import { configureLogger, info, warn, debug } from '../util/logger' // 日志
+import { flattenLangFile, writeJson } from '../util/dict-flatten'
 
 function readFile(p: string): string { return fs.readFileSync(p, 'utf8') } // 读取文本文件
 let dryRun = false // 干运行，默认关闭
@@ -329,6 +330,44 @@ function processHtmlWithAliases(htmlPath: string, mode: 'replace' | 'restore', a
   return { changed: after !== before }
 }
 
+function ensureAngularFiles(dictDir: string, mode: 'report'|'fix') {
+  const svcPath = path.join(process.cwd(), 'src/app/i18n/index.ts')
+  const pipePath = path.join(process.cwd(), 'src/app/i18n/i18n.pipe.ts')
+  const hasSvc = fs.existsSync(svcPath)
+  const hasPipe = fs.existsSync(pipePath)
+  if (!hasSvc && mode === 'fix') {
+    const svc = `import { Injectable } from '@angular/core'\nimport { en } from './en'\nimport { zh } from './zh'\n@Injectable({ providedIn: 'root' })\nexport class I18nLocaleService {\n  lang: 'zh'|'en' = 'zh'\n  getLocale() { const cached = localStorage.getItem('i18n-lang'); if (cached) this.lang = cached as any; return this.lang === 'en' ? en as any : zh }\n  get(key: string, params?: Record<string, unknown>) { const pack: any = this.getLocale(); const val = key.split('.').reduce((o,k)=>o?o[k]:undefined, pack); let s = typeof val === 'string' ? val : ''; if (params) { for (const [k,v] of Object.entries(params)) s = s.replace(new RegExp('\\\\{'+k+'\\\\}','g'), String(v)) } return s }\n  setLang(code: 'en'|'zh') { this.lang = code; localStorage.setItem('i18n-lang', code); }\n}`
+    fs.mkdirSync(path.dirname(svcPath), { recursive: true }); fs.writeFileSync(svcPath, svc, 'utf8'); info('created service', { file: svcPath })
+  } else if (!hasSvc) warn('missing service', { suggest: 'create src/app/i18n/index.ts' })
+  if (!hasPipe && mode === 'fix') {
+    const pipe = `import { Pipe, PipeTransform } from '@angular/core'\nimport { I18nLocaleService } from './index'\n@Pipe({ name: 'i18n', standalone: true })\nexport class I18nPipe implements PipeTransform { constructor(private locale: I18nLocaleService){} transform(key: string, params?: Record<string, unknown>) { return this.locale.get(key, params) } }`
+    fs.mkdirSync(path.dirname(pipePath), { recursive: true }); fs.writeFileSync(pipePath, pipe, 'utf8'); info('created pipe', { file: pipePath })
+  } else if (!hasPipe) warn('missing pipe', { suggest: 'create src/app/i18n/i18n.pipe.ts' })
+  const appComp = path.join(process.cwd(), 'src/app/app.component.ts')
+  if (fs.existsSync(appComp)) {
+    let s = readFile(appComp)
+    if (!/I18nPipe/.test(s)) {
+      if (mode === 'fix') {
+        const lastImport = s.lastIndexOf('import ')
+        const eol = s.indexOf('\n', lastImport)
+        if (eol >= 0) s = s.slice(0, eol + 1) + `import { I18nPipe } from './i18n/i18n.pipe'\n` + s.slice(eol + 1)
+        s = s.replace(/imports:\s*\[([^\]]*)\]/, (_m, inside) => `imports: [${inside} , I18nPipe]`)
+        writeFile(appComp, s); info('imported pipe globally', { file: appComp })
+      } else warn('pipe not globally imported', { file: appComp })
+    }
+  }
+}
+
+function emitJson(dictDir: string, outDir: string, langs: string[], arrayMode: 'nested'|'flat') {
+  for (const lang of langs) {
+    const fp = path.join(process.cwd(), dictDir, `${lang}.ts`)
+    if (!fs.existsSync(fp)) { warn('lang file missing', { file: fp }); continue }
+    const flat = flattenLangFile(fp, arrayMode)
+    writeJson(path.isAbsolute(outDir) ? outDir : path.join(process.cwd(), outDir), lang, flat)
+    info('json emitted', { lang, keys: Object.keys(flat).length })
+  }
+}
+
 function main() { // CLI 主入口
   const args = process.argv.slice(2) // 读取参数
   let dir = process.cwd() // 默认目录为当前工作目录
@@ -337,6 +376,7 @@ function main() { // CLI 主入口
   let outFormat: 'json' | 'pretty' | undefined
   const usage = `Usage: i18n-refactor [--dir=PATH] [--mode=replace|restore] [--dictDir=PATH] [--dry-run] [--logLevel=debug|info|warn|error] [--format=json|pretty] [--config=PATH] [--help] [--version]`
   const version = '0.1.0'
+  let exec: 'bootstrap' | null = null
   for (const a of args) { // 解析参数
     const m = a.match(/^--dir=(.+)$/) // 指定目录
     if (m) dir = path.isAbsolute(m[1]) ? m[1] : path.join(process.cwd(), m[1]) // 解析绝对/相对路径
@@ -359,16 +399,28 @@ function main() { // CLI 主入口
         if (obj.getLocalMethod) (config as any).getLocalMethod = obj.getLocalMethod
         if (obj.fallbackServiceParamName) (config as any).fallbackServiceParamName = obj.fallbackServiceParamName
         if (obj.tsGetHelperName) (config as any).tsGetHelperName = obj.tsGetHelperName
+        if (obj.dictDir) (config as any).dictDir = obj.dictDir
+        if (obj.languages) (config as any).languages = obj.languages
+        if (obj.jsonOutDir) (config as any).jsonOutDir = obj.jsonOutDir
+        if (obj.jsonArrayMode) (config as any).jsonArrayMode = obj.jsonArrayMode
+        if (obj.ensureAngular) (config as any).ensureAngular = obj.ensureAngular
         info('config loaded', { path: p })
       } catch (e) {
         warn('config load failed', {})
       }
     }
+    const ex = a.match(/^--exec=(bootstrap)$/)
+    if (ex) exec = ex[1] as any
     if (a === '--help') { process.stdout.write(usage + '\n'); return }
     if (a === '--version') { process.stdout.write(version + '\n'); return }
   }
   configureLogger({ level: logLevel, format: outFormat })
   info('start', { dir, mode, dryRun })
+  if (exec === 'bootstrap') {
+    ensureAngularFiles(config.dictDir || 'src/app/i18n', (config.ensureAngular || 'fix'))
+    emitJson(config.dictDir || 'src/app/i18n', (config.jsonOutDir || 'i18n-refactor/out'), (config.languages || ['zh','en']), (config.jsonArrayMode || 'nested'))
+    return
+  }
   const tsFiles = walk(dir, p => p.endsWith('.ts')) // 收集 TS 文件
   const results: Array<{ file: string; type: 'ts'|'html'; changed: boolean }> = [] // 结果列表
   for (const f of tsFiles) { // 遍历 TS
