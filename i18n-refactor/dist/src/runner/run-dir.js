@@ -27,6 +27,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.processTsFile = void 0;
 const fs = __importStar(require("fs")); // 文件系统，用于读写
 const path = __importStar(require("path")); // 路径工具，用于定位
 const typescript_1 = __importDefault(require("typescript")); // TypeScript AST 解析
@@ -34,9 +35,16 @@ const params_extractor_1 = require("../core/params-extractor"); // 提取 replac
 const prune_1 = require("../replace/prune"); // 清理无用别名声明/赋值
 const var_alias_1 = require("../core/var-alias"); // AST 收集别名信息
 const ts_replace_1 = require("../replace/ts-replace"); // 渲染 TS 调用 this.<alias>.get
-const dict_reader_1 = require("../util/dict-reader"); // 选择字典根与设置字典目录
+const dict_reader_1 = require("../util/dict-reader"); // 选择字典根与设置字典目录与键校验
+const template_usage_1 = require("../core/template-usage");
+const html_replace_1 = require("../replace/html-replace");
+const config_1 = require("../core/config"); // 统一配置
+const logger_1 = require("../util/logger"); // 日志
 function readFile(p) { return fs.readFileSync(p, 'utf8'); } // 读取文本文件
-function writeFile(p, s) { fs.writeFileSync(p, s, 'utf8'); } // 写出文本文件
+let dryRun = false; // 干运行，默认关闭
+let missingKeyCount = 0; // 静态键缺失计数
+function writeFile(p, s) { if (!dryRun)
+    fs.writeFileSync(p, s, 'utf8'); } // 写出文本文件（支持 dry-run）
 function walk(dir, filter) {
     const out = []; // 输出文件列表
     const entries = fs.readdirSync(dir, { withFileTypes: true }); // 读取目录条目
@@ -50,53 +58,47 @@ function walk(dir, filter) {
     return out; // 返回
 }
 function replaceHtmlContent(src, aliasInfos) {
-    let s = src;
     const info = new Map();
     for (const a of aliasInfos)
         info.set(a.name, { roots: a.roots, prefix: a.prefix });
-    // 链式模板替换：{{ var.key.replace('{a}', x).replace('{b}', y) }} → {{ 'key' | i18n: {a:x,b:y} }}
-    s = s.replace(/\{\{\s*([A-Za-z_]\w*)\.([A-Za-z0-9_.]+)((?:\.replace\([^)]*\))+)[^}]*\}\}/g, (_m, v, key, chain) => {
-        const vn = String(v);
-        const ai = info.get(vn);
+    const varNames = aliasInfos.map(a => a.name);
+    const uses = (0, template_usage_1.collectTemplateUsages)(src, varNames);
+    const computeKeyExpr = (u, ai) => {
         if (!ai)
-            return _m;
-        const rp = ai.roots && ai.roots.length ? (0, dict_reader_1.pickRoot)(ai.roots, String(key)) : '';
-        const rootPrefix = rp ? rp + '.' : '';
-        const params = (0, params_extractor_1.extractReplaceParams)(chain);
-        const p = Object.keys(params).length ? `: ${JSON.stringify(params)}` : '';
-        return `{{ '${rootPrefix}${key}' | i18n${p} }}`;
-    });
-    // 索引字面量：{{ var.key['x'] }} 或 {{ var.key["x"] }}
-    s = s.replace(/\{\{\s*([A-Za-z_]\w*)\.([A-Za-z0-9_.]+)\s*\[(['"])([^'\"]+)\3\]\s*\}\}/g, (_m, v, base, _q, lit) => {
-        const vn = String(v);
-        const ai = info.get(vn);
-        if (!ai)
-            return _m;
-        const rp = ai.roots && ai.roots.length ? (0, dict_reader_1.pickRoot)(ai.roots, String(base)) : '';
-        const rootPrefix = rp ? rp + '.' : '';
-        return `{{ '${rootPrefix}${base}.${lit}' | i18n }}`;
-    });
-    // 索引动态表达式：{{ var.key[idx] }} → {{ ('key.' + idx) | i18n }}
-    s = s.replace(/\{\{\s*([A-Za-z_]\w*)\.([A-Za-z0-9_.]+)\s*\[([^\]]+)\]\s*\}\}/g, (_m, v, base, expr) => {
-        const vn = String(v);
-        const ai = info.get(vn);
-        if (!ai)
-            return _m;
-        const rp = ai.roots && ai.roots.length ? (0, dict_reader_1.pickRoot)(ai.roots, String(base)) : '';
-        const rootPrefix = rp ? rp + '.' : '';
-        return `{{ ('${rootPrefix}${base}.' + ${expr.trim()}) | i18n }}`;
-    });
-    // 简单属性：{{ var.key }} → {{ 'key' | i18n }}
-    s = s.replace(/\{\{\s*([A-Za-z_]\w*)\.([A-Za-z0-9_.]+)\s*\}\}/g, (_m, v, key) => {
-        const vn = String(v);
-        const ai = info.get(vn);
-        if (!ai)
-            return _m;
-        const rp = ai.roots && ai.roots.length ? (0, dict_reader_1.pickRoot)(ai.roots, String(key)) : '';
-        const rootPrefix = rp ? rp + '.' : '';
-        return `{{ '${rootPrefix}${key}' | i18n }}`;
-    });
-    return s;
+            return u.keyExpr;
+        // 动态：`'base.' + expr` → 加根前缀
+        if (u.dynamicSegments && u.dynamicSegments.length) {
+            const m = u.keyExpr.match(/^'([^']+)\.'\s*\+\s*(.+)$/);
+            if (m) {
+                const base = m[1];
+                const rp = ai.roots && ai.roots.length ? (0, dict_reader_1.pickRoot)(ai.roots, base) : '';
+                const rootPrefix = rp ? rp + '.' : (ai.prefix ? ai.prefix + '.' : '');
+                return `'${rootPrefix}${base}.' + ${m[2]}`;
+            }
+            return u.keyExpr;
+        }
+        // 静态：加根前缀或选根
+        const path = u.keyExpr;
+        if (ai.prefix)
+            return `${ai.prefix}.${path}`;
+        if (ai.roots && ai.roots.length) {
+            const rp = (0, dict_reader_1.pickRoot)(ai.roots, path);
+            return rp ? `${rp}.${path}` : path;
+        }
+        return path;
+    };
+    // 生成替换片段
+    const reps = uses.map(u => {
+        const ai = info.get(u.varName);
+        const keyExpr = computeKeyExpr(u, ai);
+        const pipe = (0, html_replace_1.renderHtmlPipe)({ ...u, keyExpr });
+        return { s: u.start, e: u.end, text: pipe };
+    }).sort((a, b) => b.s - a.s);
+    // 应用替换
+    let out = src;
+    for (const r of reps)
+        out = out.slice(0, r.s) + r.text + out.slice(r.e);
+    return out;
 }
 function toReplaceChain(params) {
     let chain = '';
@@ -105,19 +107,42 @@ function toReplaceChain(params) {
     }
     return chain;
 }
+function parseObjectLiteralText(objText) {
+    const sf = typescript_1.default.createSourceFile('o.ts', `const __x = ${objText};`, typescript_1.default.ScriptTarget.Latest, true, typescript_1.default.ScriptKind.TS);
+    const out = {};
+    const visit = (node) => {
+        if (typescript_1.default.isVariableStatement(node)) {
+            for (const decl of node.declarationList.declarations) {
+                if (decl.initializer && typescript_1.default.isObjectLiteralExpression(decl.initializer)) {
+                    for (const prop of decl.initializer.properties) {
+                        if (!typescript_1.default.isPropertyAssignment(prop))
+                            continue;
+                        const key = typescript_1.default.isIdentifier(prop.name) ? prop.name.text : typescript_1.default.isStringLiteral(prop.name) ? prop.name.text : '';
+                        if (!key)
+                            continue;
+                        const val = prop.initializer.getText(sf);
+                        out[key] = val;
+                    }
+                }
+            }
+        }
+        typescript_1.default.forEachChild(node, visit);
+    };
+    visit(sf);
+    return out;
+}
 function restoreHtmlContent(src, alias) {
     const varName = alias || 'i18n';
     let s = src;
     // 还原：{{ 'a.b.c' | i18n: {k:expr} }} → {{ varName.a.b.c.replace('{k}', expr) }}
     s = s.replace(/\{\{\s*'([A-Za-z0-9_.]+)'\s*\|\s*i18n\s*:\s*(\{[^}]*\})\s*\}\}/g, (_m, key, obj) => {
         try {
-            // 将对象字面量安全解析为键值对（保留 expr 文本，简单替换引号包装保持原值）
-            const sanitized = obj.replace(/(['"])\s*([^:'"])\s*\1\s*:/g, (_mm, _q, k) => `'${k}':`); // 规范化键
-            const parsed = Function(`return (${sanitized})`)();
+            const parsed = parseObjectLiteralText(obj);
             const chain = toReplaceChain(parsed);
             return `{{ ${varName}.${key}${chain} }}`;
         }
         catch {
+            (0, logger_1.warn)('restoreHtml parse params failed', { key });
             return `{{ ${varName}.${key} }}`;
         }
     });
@@ -133,7 +158,7 @@ function restoreHtmlContent(src, alias) {
 }
 function collectGetLocalVars(tsCode) {
     const names = new Set();
-    const re = /this\.([A-Za-z_]\w*)\s*=\s*[^;]*\.getLocale\([^)]*\)/g;
+    const re = new RegExp(`this\\.([A-Za-z_]\\w*)\\s*=\\s*[^;]*\\.${config_1.config.getLocalMethod}\\([^)]*\\)`, 'g');
     let m;
     while ((m = re.exec(tsCode)))
         names.add(m[1]);
@@ -141,11 +166,11 @@ function collectGetLocalVars(tsCode) {
 }
 function buildAliases(tsCode) {
     const sf = typescript_1.default.createSourceFile('x.ts', tsCode, typescript_1.default.ScriptTarget.Latest, true, typescript_1.default.ScriptKind.TS);
-    const aliases = (0, var_alias_1.collectVarAliases)(sf, 'locale', 'getLocale');
+    const aliases = (0, var_alias_1.collectVarAliases)(sf, config_1.config.fallbackServiceParamName, config_1.config.getLocalMethod);
     const out = [];
     for (const a of aliases)
         out.push({ name: a.name, prefix: a.prefix, roots: a.roots });
-    const rx = /\b([A-Za-z_]\w*)\s*=\s*this\.locale\.getLocale\s*\(/g;
+    const rx = new RegExp(`\\b([A-Za-z_]\\w*)\\s*=\\s*this\\.${config_1.config.fallbackServiceParamName}\\.${config_1.config.getLocalMethod}\\s*\\(`, 'g');
     let m;
     while ((m = rx.exec(tsCode)))
         out.push({ name: m[1], prefix: null });
@@ -174,6 +199,22 @@ function replaceTsContent(src) {
         }
         return path;
     };
+    const auditStaticKey = (a, path) => {
+        let root = '';
+        if (a.prefix) {
+            const seg = a.prefix.split('.')[0];
+            root = seg;
+        }
+        else if (a.roots && a.roots.length)
+            root = (0, dict_reader_1.pickRoot)(a.roots, path);
+        if (root) {
+            const ok = (0, dict_reader_1.hasKey)(root, path);
+            if (!ok) {
+                missingKeyCount++;
+                (0, logger_1.warn)('missing i18n key', { root, path });
+            }
+        }
+    };
     const visitAst = (node) => {
         if (typescript_1.default.isPropertyAccessExpression(node)) {
             let outer = node;
@@ -197,6 +238,7 @@ function replaceTsContent(src) {
                     if (!isCall && !isEl && !isAssignLHS && !isReplaceChain) {
                         const path = segs.join('.');
                         const text = (0, ts_replace_1.renderTsGet)(aliasName, { keyExpr: composeAstKey(ai, path) });
+                        auditStaticKey(ai, path);
                         reps.push({ s: outer.getStart(sfAst), e: outer.getEnd(), text });
                     }
                 }
@@ -224,14 +266,17 @@ function replaceTsContent(src) {
         // chain .replace()
         s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)((?:\\.replace\\([^)]*\\))+)`, 'g'), (_m, path, chain) => {
             const params = (0, params_extractor_1.extractReplaceParams)(chain);
+            auditStaticKey(a, String(path));
             return (0, ts_replace_1.renderTsGet)(name, { keyExpr: composeKey(String(path)), params });
         });
         // element access with string literal '...'
         s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)\\s*\\[\\s*'([^']+)'\\s*\\]`, 'g'), (_m, base, lit) => {
+            auditStaticKey(a, String(base) + '.' + String(lit));
             return (0, ts_replace_1.renderTsGet)(name, { keyExpr: composeKey(`${String(base)}.${String(lit)}`) });
         });
         // element access with string literal "..."
         s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)\\s*\\[\\s*\"([^\"]+)\"\\s*\\]`, 'g'), (_m, base, lit) => {
+            auditStaticKey(a, String(base) + '.' + String(lit));
             return (0, ts_replace_1.renderTsGet)(name, { keyExpr: composeKey(`${String(base)}.${String(lit)}`) });
         });
         // dynamic element access [expr]
@@ -253,6 +298,7 @@ function replaceTsContent(src) {
             return path;
         };
         s = s.replace(new RegExp(`this\\.${name}\\.(?!get\\b)([A-Za-z0-9_.]+)(?!\\s*\\(|\\s*\\.replace|\\s*\\[|\\s*=)`, 'g'), (_m, path) => {
+            auditStaticKey(a, String(path));
             return (0, ts_replace_1.renderTsGet)(name, { keyExpr: composeKey(String(path)) });
         });
     }
@@ -275,17 +321,14 @@ function processTsFile(tsPath) {
     after = after.replace(/constructor\s*\(([^)]*)\)/, (m, params) => {
         let p = params;
         p = p.replace(/\b(private|public)?\s*locale\s*:\s*I18nLocaleService\b/, 'public i18n: I18nLocaleService');
-        if (!/\bi18n\s*:\s*I18nLocaleService\b/.test(p)) {
-            p = (p.trim().length ? p + ', ' : '') + 'public i18n: I18nLocaleService';
-        }
         return `constructor(${p})`;
     });
     // remove remaining getLocale/getLocal assignments
     after = after.replace(/this\.[A-Za-z_]\w*\s*=\s*[^;]*\.(?:getLocal|getLocale)\([^)]*\)(?:\.[A-Za-z0-9_.]+)?\s*;?/g, '');
     const sf = typescript_1.default.createSourceFile(tsPath, after, typescript_1.default.ScriptTarget.Latest, true, typescript_1.default.ScriptKind.TS);
-    const aliases = (0, var_alias_1.collectVarAliases)(sf, 'locale', 'getLocale').map(a => a.name);
+    const aliases = (0, var_alias_1.collectVarAliases)(sf, config_1.config.fallbackServiceParamName, config_1.config.getLocalMethod).map(a => a.name);
     // also include direct assignments from locale.getLocale()
-    const rx = /\b([A-Za-z_]\w*)\s*=\s*this\.locale\.getLocale\s*\(/g;
+    const rx = new RegExp(`\\b([A-Za-z_]\\w*)\\s*=\\s*this\\.${config_1.config.fallbackServiceParamName}\\.${config_1.config.getLocalMethod}\\s*\\(`, 'g');
     let mm;
     while ((mm = rx.exec(after)))
         aliases.push(mm[1]);
@@ -323,15 +366,16 @@ function processTsFile(tsPath) {
         writeFile(tsPath, after);
     return { changed: after !== before, code: after, aliases: Array.from(new Set(aliases)), htmlPath };
 }
+exports.processTsFile = processTsFile;
 function collectHtmlAliases(tsPath) {
     try {
         const code = readFile(tsPath);
         const sf = typescript_1.default.createSourceFile('c.ts', code, typescript_1.default.ScriptTarget.Latest, true, typescript_1.default.ScriptKind.TS);
-        const aliases = (0, var_alias_1.collectVarAliases)(sf, 'locale', 'getLocale');
+        const aliases = (0, var_alias_1.collectVarAliases)(sf, config_1.config.fallbackServiceParamName, config_1.config.getLocalMethod);
         const names = new Set();
         for (const a of aliases)
             names.add(a.name);
-        const rx = /\b([A-Za-z_]\w*)\s*=\s*this\.locale\.getLocale\s*\(/g;
+        const rx = new RegExp(`\\b([A-Za-z_]\\w*)\\s*=\\s*this\\.${config_1.config.fallbackServiceParamName}\\.${config_1.config.getLocalMethod}\\s*\\(`, 'g');
         let m;
         while ((m = rx.exec(code)))
             names.add(m[1]);
@@ -358,6 +402,10 @@ function main() {
     const args = process.argv.slice(2); // 读取参数
     let dir = process.cwd(); // 默认目录为当前工作目录
     let mode = 'replace'; // 默认模式为替换
+    let logLevel;
+    let outFormat;
+    const usage = `Usage: i18n-refactor [--dir=PATH] [--mode=replace|restore] [--dictDir=PATH] [--dry-run] [--logLevel=debug|info|warn|error] [--format=json|pretty] [--config=PATH] [--help] [--version]`;
+    const version = '0.1.0';
     for (const a of args) { // 解析参数
         const m = a.match(/^--dir=(.+)$/); // 指定目录
         if (m)
@@ -368,7 +416,45 @@ function main() {
         const d = a.match(/^--dictDir=(.+)$/); // 指定字典目录
         if (d)
             (0, dict_reader_1.setDictDir)(d[1]); // 设置目录
+        const dl = a.match(/^--logLevel=(debug|info|warn|error)$/);
+        if (dl)
+            logLevel = dl[1];
+        const fm = a.match(/^--format=(json|pretty)$/);
+        if (fm)
+            outFormat = fm[1];
+        if (a === '--dry-run')
+            dryRun = true;
+        const cf = a.match(/^--config=(.+)$/);
+        if (cf) {
+            try {
+                const p = path.isAbsolute(cf[1]) ? cf[1] : path.join(process.cwd(), cf[1]);
+                const txt = fs.readFileSync(p, 'utf8');
+                const obj = JSON.parse(txt);
+                if (obj.serviceTypeName)
+                    config_1.config.serviceTypeName = obj.serviceTypeName;
+                if (obj.getLocalMethod)
+                    config_1.config.getLocalMethod = obj.getLocalMethod;
+                if (obj.fallbackServiceParamName)
+                    config_1.config.fallbackServiceParamName = obj.fallbackServiceParamName;
+                if (obj.tsGetHelperName)
+                    config_1.config.tsGetHelperName = obj.tsGetHelperName;
+                (0, logger_1.info)('config loaded', { path: p });
+            }
+            catch (e) {
+                (0, logger_1.warn)('config load failed', {});
+            }
+        }
+        if (a === '--help') {
+            process.stdout.write(usage + '\n');
+            return;
+        }
+        if (a === '--version') {
+            process.stdout.write(version + '\n');
+            return;
+        }
     }
+    (0, logger_1.configureLogger)({ level: logLevel, format: outFormat });
+    (0, logger_1.info)('start', { dir, mode, dryRun });
     const tsFiles = walk(dir, p => p.endsWith('.ts')); // 收集 TS 文件
     const results = []; // 结果列表
     for (const f of tsFiles) { // 遍历 TS
@@ -381,7 +467,15 @@ function main() {
         }
     }
     const changed = results.filter(r => r.changed).length; // 统计变更数
-    const summary = { dir, files: results.length, changed }; // 汇总信息
-    process.stdout.write(JSON.stringify({ summary, results }, null, 2) + '\n'); // 输出 JSON 摘要
+    const summary = { dir, files: results.length, changed, missingKeys: missingKeyCount }; // 汇总信息
+    if ((outFormat || 'json') === 'json')
+        process.stdout.write(JSON.stringify({ summary, results }, null, 2) + '\n');
+    else {
+        (0, logger_1.info)('summary', summary);
+        for (const r of results)
+            (0, logger_1.info)('result', r);
+    }
 }
-main(); // 执行主程序
+if (require.main === module) {
+    main(); // 执行主程序
+}

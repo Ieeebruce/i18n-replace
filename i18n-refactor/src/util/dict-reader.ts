@@ -1,5 +1,8 @@
 import * as fs from 'fs' // 引入文件系统模块，用于读取字典文件
 import * as path from 'path' // 引入路径模块，用于拼接与解析目录
+import ts from 'typescript'
+import { warn, debug } from './logger'
+import { ParseError } from './errors'
 
 type DictMap = Record<string, Set<string>> // 根名称到其包含键集合的映射
 
@@ -16,16 +19,46 @@ function tryPaths(): string[] { // 返回可用的字典目录候选列表
   return Array.from(new Set(candidates)).filter(p => fs.existsSync(p)) // 去重后过滤存在的目录
 }
 
-function parseTsObject(fileContent: string): any { // 将 TS 常量对象字面量解析为普通对象
-  const s = fileContent // 原始文件内容
-    .replace(/export\s+const\s+\w+\s*=\s*/, '') // 去掉导出常量前缀
-    .replace(/as\s+const\s*;?\s*$/, '') // 去掉 as const 尾注
-  try { // 解析对象字面量
-    // eslint-disable-next-line no-new-func
-    return Function(`return (${s})`)() // 以安全方式仅对对象字面量求值
-  } catch { // 解析失败兜底
-    return null // 返回空
+function flattenAstObject(obj: ts.ObjectLiteralExpression, base: string, out: Set<string>) {
+  for (const prop of obj.properties) {
+    if (!ts.isPropertyAssignment(prop)) continue
+    const name = ts.isIdentifier(prop.name) ? prop.name.text : ts.isStringLiteral(prop.name) ? prop.name.text : ''
+    if (!name) continue
+    const next = base ? `${base}.${name}` : name
+    if (prop.initializer && ts.isObjectLiteralExpression(prop.initializer)) {
+      flattenAstObject(prop.initializer, next, out)
+    } else {
+      out.add(next)
+    }
   }
+}
+
+function parseDictFile(fp: string): Record<string, Set<string>> {
+  const text = fs.readFileSync(fp, 'utf8')
+  const sf = ts.createSourceFile(fp, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  const roots: Record<string, Set<string>> = {}
+  const visit = (node: ts.Node) => {
+    if (ts.isVariableStatement(node)) {
+      for (const decl of node.declarationList.declarations) {
+        if (decl.initializer) {
+          let top: ts.ObjectLiteralExpression | null = null
+          if (ts.isObjectLiteralExpression(decl.initializer)) top = decl.initializer
+          else if (ts.isAsExpression(decl.initializer) && ts.isObjectLiteralExpression(decl.initializer.expression)) top = decl.initializer.expression
+          if (!top) continue
+          for (const prop of top.properties) {
+            if (!ts.isPropertyAssignment(prop)) continue
+            const rootName = ts.isIdentifier(prop.name) ? prop.name.text : ts.isStringLiteral(prop.name) ? prop.name.text : ''
+            if (!rootName) continue
+            const set = roots[rootName] || (roots[rootName] = new Set<string>())
+            if (prop.initializer && ts.isObjectLiteralExpression(prop.initializer)) flattenAstObject(prop.initializer, '', set)
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sf)
+  return roots
 }
 
 function flatten(root: string, obj: any, base: string, out: Set<string>) { // 展开对象树到键路径集合
@@ -49,12 +82,16 @@ function buildDictMap(): DictMap { // 构建根到键集合的映射
     for (const fname of ['zh.ts', 'en.ts']) { // 遍历语言文件
       const fp = path.join(dir, fname) // 组装文件路径
       if (!fs.existsSync(fp)) continue // 不存在则跳过
-      const content = fs.readFileSync(fp, 'utf8') // 读取文件
-      const obj = parseTsObject(content) // 解析对象
-      if (!obj || typeof obj !== 'object') continue // 无法解析则跳过
-      for (const root of Object.keys(obj)) { // 遍历顶层根
-        const set = map[root] || (map[root] = new Set<string>()) // 获取或创建集合
-        flatten(root, obj[root], '', set) // 展开根下所有键路径
+      try {
+        const roots = parseDictFile(fp)
+        for (const root of Object.keys(roots)) {
+          const set = map[root] || (map[root] = new Set<string>())
+          for (const k of roots[root]) set.add(k)
+        }
+        debug('dict parsed', { file: fp, roots: Object.keys(roots).length })
+      } catch (e) {
+        const err = new ParseError('dict parse failed', fp)
+        warn(err.message, { file: fp })
       }
     }
   }

@@ -1,4 +1,5 @@
 import ts from 'typescript' // 引入 TypeScript AST 与类型
+import { config } from '../core/config'
 import { collectVarAliases } from '../core/var-alias' // 导入别名收集工具
 import { extractReplaceParams } from '../core/params-extractor' // 导入 replace 参数抽取器
 import { renderTsGet } from '../replace/ts-replace' // 导入 TS 调用渲染器
@@ -19,12 +20,12 @@ function collectGetLocaleVars(code: string): string[] { // 收集通过 getLocal
 type AliasInfo = { name: string; prefix: string | null; roots?: string[] } // 别名信息（名、前缀、合并来源）
 function buildAliases(code: string): AliasInfo[] { // 从 TS 字符串中构建别名列表
   const sf = ts.createSourceFile('x.ts', code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS) // 解析源码
-  const raw = collectVarAliases(sf, 'locale', 'getLocale') // 通过 AST 收集别名
+  const raw = collectVarAliases(sf, config.fallbackServiceParamName, config.getLocalMethod) // 通过 AST 收集别名
   const out: AliasInfo[] = [] // 输出列表
   for (const a of raw) { // 转换结果结构
     out.push({ name: a.name, prefix: a.prefix, roots: a.roots }) // 推入别名
   }
-  const rx = /\b([A-Za-z_]\w*)\s*=\s*this\.locale\.getLocale\s*\(/g // 直接赋值检测
+  const rx = new RegExp(`\\b([A-Za-z_]\\w*)\\s*=\\s*this\\.${config.fallbackServiceParamName}\\.${config.getLocalMethod}\\s*\\(`, 'g') // 直接赋值检测
   let m: RegExpExecArray | null // 匹配变量
   while ((m = rx.exec(code))) out.push({ name: m[1], prefix: null }) // 加入无前缀别名
   if (/\bi18n\s*:\s*/.test(code) || /this\.i18n\s*=/.test(code)) out.push({ name: 'i18n', prefix: null }) // 标记 i18n
@@ -248,7 +249,9 @@ export function processComponent(tsCode: string, htmlCode: string, filePath?: st
   // 规范化构造函数注入 I18nService
   tsOut = tsOut.replace(/constructor\s*\(([^)]*)\)/, (m, params) => { // 重写构造签名
     let p = params // 参数文本
-    p = p.replace(/\b(private|public)?\s*locale\s*:\s*I18nLocaleService\b/, 'public i18n: I18nLocaleService') // 替换旧依赖
+    const svc = config.serviceTypeName
+    const prm = config.fallbackServiceParamName
+    p = p.replace(new RegExp(`\\b(private|public)?\\s*${prm}\\s*:\\s*${svc}\\b`), `public i18n: ${svc}`) // 替换旧依赖
     return `constructor(${p})` // 返回构造函数头
   })
   

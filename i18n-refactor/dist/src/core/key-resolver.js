@@ -4,67 +4,82 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.resolveKeyFromAccess = void 0;
-const typescript_1 = __importDefault(require("typescript")); // 引入 TypeScript，用于 AST 解析与打印
+const typescript_1 = __importDefault(require("typescript"));
+const dict_reader_1 = require("../util/dict-reader");
+/**
+ * 从 TypeScript 源码中的访问表达式（如 obj.a.b 或 obj['key']）解析出国际化键（i18n key）。
+ * @param sf - 当前源文件，用于打印节点文本
+ * @param node - 起始访问表达式节点
+ * @param aliasPrefix - 用户手动指定的前缀（可为空）
+ * @param roots - 可选的根路径列表，用于自动挑选最匹配的前缀
+ * @returns 解析结果，包含最终生成的 keyExpr 与动态片段数组
+ */
 function resolveKeyFromAccess(sf, node, aliasPrefix, roots) {
-    const segs = []; // 收集的片段：属性/字面量/动态
-    const printer = typescript_1.default.createPrinter(); // 创建打印器，用于还原表达式文本
-    let cur = node; // 当前遍历节点
-    while (true) { // 顺链回溯
-        if (typescript_1.default.isPropertyAccessExpression(cur)) { // 属性访问 a.b
+    const segs = [];
+    const printer = typescript_1.default.createPrinter();
+    let cur = node;
+    while (true) {
+        if (typescript_1.default.isPropertyAccessExpression(cur)) {
             if (cur.expression.kind === typescript_1.default.SyntaxKind.ThisKeyword)
-                break; // 到达 this.<alias> 停止
-            const nm = cur.name.text; // 记录属性名
-            segs.push({ kind: 'prop', text: nm }); // 存入片段
-            cur = cur.expression; // 上溯
-            continue; // 下一轮
+                break;
+            const nm = cur.name.text;
+            segs.push({ kind: 'prop', text: nm });
+            cur = cur.expression;
+            continue;
         }
-        if (typescript_1.default.isElementAccessExpression(cur)) { // 索引访问 a['x'] 或 a[idx]
-            const arg = cur.argumentExpression; // 获取索引表达式
+        if (typescript_1.default.isElementAccessExpression(cur)) {
+            const arg = cur.argumentExpression;
             if (typescript_1.default.isStringLiteral(arg))
-                segs.push({ kind: 'lit', text: arg.text }); // 字面量索引
+                segs.push({ kind: 'lit', text: arg.text });
             else
-                segs.push({ kind: 'dyn', text: printer.printNode(typescript_1.default.EmitHint.Unspecified, arg, sf) }); // 动态索引表达式文本
-            cur = cur.expression; // 上溯
-            continue; // 继续捕获前置属性，遇到别名停止
+                segs.push({ kind: 'dyn', text: printer.printNode(typescript_1.default.EmitHint.Unspecified, arg, sf) });
+            cur = cur.expression;
+            continue;
         }
-        break; // 不是属性/索引访问则结束
+        break;
     }
-    segs.reverse(); // 反转得到自左到右顺序
-    const prefix = aliasPrefix && aliasPrefix.length ? aliasPrefix : (roots && roots.length ? roots[0] : ''); // 前缀：别名路径或根
-    const staticParts = []; // 静态片段集合
-    const dynamics = []; // 动态片段集合
-    let dynamicSeen = false; // 是否遇到动态
-    for (const s of segs) { // 收集直到动态为止
+    segs.reverse();
+    const staticParts = [];
+    const dynamics = [];
+    let dynamicSeen = false;
+    for (const s of segs) {
         if (s.kind === 'dyn') {
             dynamics.push(s.text);
             dynamicSeen = true;
             break;
-        } // 记录首个动态并停止
-        staticParts.push(s.text); // 记录静态片段
+        }
+        staticParts.push(s.text);
     }
-    const staticPath = [prefix, ...staticParts].filter(Boolean).join('.'); // 拼静态路径
-    let keyExpr = staticPath; // 初始键表达式
-    if (dynamicSeen) { // 有动态索引时，拼接成字符串加表达式
-        const lastDyn = dynamics[0]; // 首个动态片段
-        keyExpr = `'${staticPath}.' + ${lastDyn}`; // 静态 + '.' + 动态
+    let prefix = aliasPrefix && aliasPrefix.length ? aliasPrefix : '';
+    if (!prefix && roots && roots.length) {
+        const r = (0, dict_reader_1.pickRoot)(roots, staticParts.join('.'));
+        if (r)
+            prefix = r;
     }
-    if (!staticParts.length && !dynamicSeen) { // 只有别名本身：从原文本兜底解析
-        const txt = node.getText(sf).replace(/^this\./, ''); // 去掉 this.
-        const remainder = txt.replace(/^[A-Za-z_]\w*\./, ''); // 去掉别名
-        if (/\[[^\]]+\]$/.test(remainder)) { // 末尾为索引访问
-            const m = remainder.match(/^(.*)\[(['"])([^'\"]+)\2\]$/); // 字面量索引
+    const staticPath = [prefix, ...staticParts].filter(Boolean).join('.');
+    let keyExpr = staticPath;
+    if (dynamicSeen) {
+        const lastDyn = dynamics[0];
+        keyExpr = `'${staticPath}.' + ${lastDyn}`;
+    }
+    if (!staticParts.length && !dynamicSeen) {
+        const txt = node.getText(sf).replace(/^this\./, '');
+        const remainder = txt.replace(/^[A-Za-z_]\w*\./, '');
+        let basePath = remainder;
+        if (/\[[^\]]+\]$/.test(remainder)) {
+            const m = remainder.match(/^(.*)\[(['"])([^'\"]+)\2\]$/);
             if (m)
-                keyExpr = [prefix, m[1], m[3]].filter(Boolean).join('.'); // 拼字面量索引
+                keyExpr = [prefix, m[1], m[3]].filter(Boolean).join('.');
             else {
-                const md = remainder.match(/^(.*)\[([^\]]+)\]$/); // 动态索引
+                const md = remainder.match(/^(.*)\[([^\]]+)\]$/);
                 if (md)
-                    keyExpr = `'${[prefix, md[1]].filter(Boolean).join('.')}.' + ${md[2]}`; // 拼动态索引
+                    keyExpr = `'${[prefix, md[1]].filter(Boolean).join('.')}.' + ${md[2]}`;
             }
         }
         else {
-            keyExpr = [prefix, remainder].filter(Boolean).join('.'); // 普通属性拼接
+            keyExpr = [prefix, basePath].filter(Boolean).join('.');
         }
     }
-    return { keyExpr, dynamicSegments: dynamics.length ? dynamics : undefined }; // 返回解析结果
+    return { keyExpr, dynamicSegments: dynamics.length ? dynamics : undefined };
 }
 exports.resolveKeyFromAccess = resolveKeyFromAccess;

@@ -7,3 +7,6 @@ test('pickRoot selects app when both roots have common.desc', () => {
 test('pickRoot selects app for app.footer', () => {
     expect((0, dict_reader_1.pickRoot)(['common', 'app'], 'footer')).toBe('app');
 });
+test('pickRoot selects app for app.footer', () => {
+    expect((0, dict_reader_1.pickRoot)(['common', 'app'], 'onlyCommon')).toBe('common');
+});

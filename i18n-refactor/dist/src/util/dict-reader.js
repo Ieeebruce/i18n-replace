@@ -22,10 +22,16 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.setDictDir = exports.pickRoot = exports.hasKey = void 0;
 const fs = __importStar(require("fs")); // 引入文件系统模块，用于读取字典文件
 const path = __importStar(require("path")); // 引入路径模块，用于拼接与解析目录
+const typescript_1 = __importDefault(require("typescript"));
+const logger_1 = require("./logger");
+const errors_1 = require("./errors");
 function tryPaths() {
     const cwd = process.cwd(); // 当前工作目录
     const here = __dirname; // 当前文件所在目录
@@ -39,17 +45,54 @@ function tryPaths() {
     ];
     return Array.from(new Set(candidates)).filter(p => fs.existsSync(p)); // 去重后过滤存在的目录
 }
-function parseTsObject(fileContent) {
-    const s = fileContent // 原始文件内容
-        .replace(/export\s+const\s+\w+\s*=\s*/, '') // 去掉导出常量前缀
-        .replace(/as\s+const\s*;?\s*$/, ''); // 去掉 as const 尾注
-    try { // 解析对象字面量
-        // eslint-disable-next-line no-new-func
-        return Function(`return (${s})`)(); // 以安全方式仅对对象字面量求值
+function flattenAstObject(obj, base, out) {
+    for (const prop of obj.properties) {
+        if (!typescript_1.default.isPropertyAssignment(prop))
+            continue;
+        const name = typescript_1.default.isIdentifier(prop.name) ? prop.name.text : typescript_1.default.isStringLiteral(prop.name) ? prop.name.text : '';
+        if (!name)
+            continue;
+        const next = base ? `${base}.${name}` : name;
+        if (prop.initializer && typescript_1.default.isObjectLiteralExpression(prop.initializer)) {
+            flattenAstObject(prop.initializer, next, out);
+        }
+        else {
+            out.add(next);
+        }
     }
-    catch { // 解析失败兜底
-        return null; // 返回空
-    }
+}
+function parseDictFile(fp) {
+    const text = fs.readFileSync(fp, 'utf8');
+    const sf = typescript_1.default.createSourceFile(fp, text, typescript_1.default.ScriptTarget.Latest, true, typescript_1.default.ScriptKind.TS);
+    const roots = {};
+    const visit = (node) => {
+        if (typescript_1.default.isVariableStatement(node)) {
+            for (const decl of node.declarationList.declarations) {
+                if (decl.initializer) {
+                    let top = null;
+                    if (typescript_1.default.isObjectLiteralExpression(decl.initializer))
+                        top = decl.initializer;
+                    else if (typescript_1.default.isAsExpression(decl.initializer) && typescript_1.default.isObjectLiteralExpression(decl.initializer.expression))
+                        top = decl.initializer.expression;
+                    if (!top)
+                        continue;
+                    for (const prop of top.properties) {
+                        if (!typescript_1.default.isPropertyAssignment(prop))
+                            continue;
+                        const rootName = typescript_1.default.isIdentifier(prop.name) ? prop.name.text : typescript_1.default.isStringLiteral(prop.name) ? prop.name.text : '';
+                        if (!rootName)
+                            continue;
+                        const set = roots[rootName] || (roots[rootName] = new Set());
+                        if (prop.initializer && typescript_1.default.isObjectLiteralExpression(prop.initializer))
+                            flattenAstObject(prop.initializer, '', set);
+                    }
+                }
+            }
+        }
+        typescript_1.default.forEachChild(node, visit);
+    };
+    visit(sf);
+    return roots;
 }
 function flatten(root, obj, base, out) {
     if (obj && typeof obj === 'object') { // 仅处理对象
@@ -73,13 +116,18 @@ function buildDictMap() {
             const fp = path.join(dir, fname); // 组装文件路径
             if (!fs.existsSync(fp))
                 continue; // 不存在则跳过
-            const content = fs.readFileSync(fp, 'utf8'); // 读取文件
-            const obj = parseTsObject(content); // 解析对象
-            if (!obj || typeof obj !== 'object')
-                continue; // 无法解析则跳过
-            for (const root of Object.keys(obj)) { // 遍历顶层根
-                const set = map[root] || (map[root] = new Set()); // 获取或创建集合
-                flatten(root, obj[root], '', set); // 展开根下所有键路径
+            try {
+                const roots = parseDictFile(fp);
+                for (const root of Object.keys(roots)) {
+                    const set = map[root] || (map[root] = new Set());
+                    for (const k of roots[root])
+                        set.add(k);
+                }
+                (0, logger_1.debug)('dict parsed', { file: fp, roots: Object.keys(roots).length });
+            }
+            catch (e) {
+                const err = new errors_1.ParseError('dict parse failed', fp);
+                (0, logger_1.warn)(err.message, { file: fp });
             }
         }
     }
