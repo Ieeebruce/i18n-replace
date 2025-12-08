@@ -2,19 +2,14 @@
 import * as fs from 'fs' // 文件系统，用于读写
 import * as path from 'path' // 路径工具，用于定位
 import ts from 'typescript' // TypeScript AST 解析
-import { extractReplaceParams } from '../core/params-extractor' // 提取 replace 参数对象
-import { pruneUnused } from '../replace/prune' // 清理无用别名声明/赋值
-import { collectVarAliases } from '../core/var-alias' // AST 收集别名信息
-import { renderTsGet } from '../replace/ts-replace' // 渲染 TS 调用 this.<alias>.get
-import { pickRoot, setDictDir, hasKey } from '../util/dict-reader' // 选择字典根与设置字典目录与键校验
-import { collectTemplateUsages } from '../core/template-usage'
-import { renderHtmlPipe } from '../replace/html-replace'
-import { config } from '../core/config' // 统一配置
-import { configureLogger, info, warn, debug } from '../util/logger' // 日志
+import { config } from '../core/config' // 统一配置（固定从 omrp.config.json 加载）
+import { configureLogger, info, warn } from '../util/logger' // 日志
+import { setDictDir } from '../util/dict-reader' // 设置字典目录（用于 pickRoot/hasKey 等工具）
+import { processComponent } from './component' // 复用 UT 使用的组件处理逻辑
 import { flattenLangFile, writeJson } from '../util/dict-flatten'
 
 function readFile(p: string): string { return fs.readFileSync(p, 'utf8') } // 读取文本文件
-let dryRun = false // 干运行，默认关闭
+let dryRun = !!config.dryRun // 干运行，从配置读取
 let missingKeyCount = 0 // 静态键缺失计数
 function writeFile(p: string, s: string) { if (!dryRun) fs.writeFileSync(p, s, 'utf8') } // 写出文本文件（支持 dry-run）
 function walk(dir: string, filter: (p: string) => boolean): string[] { // 递归遍历目录并按过滤器收集文件
@@ -28,45 +23,7 @@ function walk(dir: string, filter: (p: string) => boolean): string[] { // 递归
   return out // 返回
 }
 
-function replaceHtmlContent(src: string, aliasInfos: Array<{ name: string; roots?: string[]; prefix?: string | null }>): string {
-  const info = new Map<string, { roots?: string[]; prefix?: string | null }>()
-  for (const a of aliasInfos) info.set(a.name, { roots: a.roots, prefix: a.prefix })
-  const varNames = aliasInfos.map(a => a.name)
-  const uses = collectTemplateUsages(src, varNames)
-  const computeKeyExpr = (u: { keyExpr: string; dynamicSegments?: string[] }, ai?: { roots?: string[]; prefix?: string | null }): string => {
-    if (!ai) return u.keyExpr
-    // 动态：`'base.' + expr` → 加根前缀
-    if (u.dynamicSegments && u.dynamicSegments.length) {
-      const m = u.keyExpr.match(/^'([^']+)\.'\s*\+\s*(.+)$/)
-      if (m) {
-        const base = m[1]
-        const rp = ai.roots && ai.roots.length ? pickRoot(ai.roots, base) : ''
-        const rootPrefix = rp ? rp + '.' : (ai.prefix ? ai.prefix + '.' : '')
-        return `'${rootPrefix}${base}.' + ${m[2]}`
-      }
-      return u.keyExpr
-    }
-    // 静态：加根前缀或选根
-    const path = u.keyExpr
-    if (ai.prefix) return `${ai.prefix}.${path}`
-    if (ai.roots && ai.roots.length) {
-      const rp = pickRoot(ai.roots, path)
-      return rp ? `${rp}.${path}` : path
-    }
-    return path
-  }
-  // 生成替换片段
-  const reps = uses.map(u => {
-    const ai = info.get(u.varName)
-    const keyExpr = computeKeyExpr(u, ai)
-    const pipe = renderHtmlPipe({ ...u, keyExpr })
-    return { s: u.start!, e: u.end!, text: pipe }
-  }).sort((a, b) => b.s - a.s)
-  // 应用替换
-  let out = src
-  for (const r of reps) out = out.slice(0, r.s) + r.text + out.slice(r.e)
-  return out
-}
+// 旧 HTML 替换实现删除，统一复用 component.ts 中的实现
 
 function toReplaceChain(params: Record<string, string>): string { // 将对象 {k:expr} 转回 .replace 链
   let chain = ''
@@ -124,6 +81,7 @@ function restoreHtmlContent(src: string, alias: string | null): string { // 将�
   return s
 }
 
+
 function collectGetLocalVars(tsCode: string): string[] {
   const names = new Set<string>()
   const re = new RegExp(`this\\.([A-Za-z_]\\w*)\\s*=\\s*[^;]*\\.${config.getLocalMethod}\\([^)]*\\)`, 'g')
@@ -132,6 +90,7 @@ function collectGetLocalVars(tsCode: string): string[] {
   return Array.from(names)
 }
 
+/*
 function buildAliases(tsCode: string): Array<{ name: string; prefix: string | null; roots?: string[] }> {
   const sf = ts.createSourceFile('x.ts', tsCode, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
   const aliases = collectVarAliases(sf, config.fallbackServiceParamName, config.getLocalMethod)
@@ -246,35 +205,10 @@ function replaceTsContent(src: string): string {
   return s
 }
 
+*/
 export function processTsFile(tsPath: string): { changed: boolean; code: string; aliases: string[]; htmlPath: string | null } {
   const before = readFile(tsPath)
-  const varNames = collectGetLocalVars(before)
-  let after = replaceTsContent(before)
-  after = pruneUnused({} as any, after, varNames)
-  // unify alias get-calls to this.i18n.get
-  const aliasInfos = buildAliases(before)
-  for (const a of aliasInfos) {
-    if (a.name !== 'i18n') {
-      after = after.replace(new RegExp(`this\\.${a.name}\\\.get(?!Locale)\\s*\\(`, 'g'), 'this.i18n.get(')
-      after = after.replace(new RegExp(`\\b${a.name}\\s*:\\s*any\\s*;`, 'g'), '')
-    }
-  }
-  // normalize constructor to inject I18nLocaleService as i18n
-  after = after.replace(/constructor\s*\(([^)]*)\)/, (m, params) => {
-    let p = params
-    p = p.replace(/\b(private|public)?\s*locale\s*:\s*I18nLocaleService\b/, 'public i18n: I18nLocaleService')
-    return `constructor(${p})`
-  })
-  // remove remaining getLocale/getLocal assignments
-  after = after.replace(/this\.[A-Za-z_]\w*\s*=\s*[^;]*\.(?:getLocal|getLocale)\([^)]*\)(?:\.[A-Za-z0-9_.]+)?\s*;?/g, '')
-  const sf = ts.createSourceFile(tsPath, after, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
-  const aliases = collectVarAliases(sf, config.fallbackServiceParamName, config.getLocalMethod).map(a => a.name)
-  // also include direct assignments from locale.getLocale()
-  const rx = new RegExp(`\\b([A-Za-z_]\\w*)\\s*=\\s*this\\.${config.fallbackServiceParamName}\\.${config.getLocalMethod}\\s*\\(`, 'g')
-  let mm: RegExpExecArray | null
-  while ((mm = rx.exec(after))) aliases.push(mm[1])
-  if (/\bi18n\s*:\s*/.test(after) || /this\.i18n\s*=/.test(after)) aliases.push('i18n')
-  if (/\bdict\s*:\s*/.test(after) || /this\.dict\s*=/.test(after)) aliases.push('dict')
+  const sf = ts.createSourceFile(tsPath, before, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
   // detect Angular Component and templateUrl
   let htmlPath: string | null = null
   const visit = (node: ts.Node) => {
@@ -301,31 +235,21 @@ export function processTsFile(tsPath: string): { changed: boolean; code: string;
     ts.forEachChild(node, visit)
   }
   visit(sf)
-  if (after !== before) writeFile(tsPath, after)
-  return { changed: after !== before, code: after, aliases: Array.from(new Set(aliases)), htmlPath }
+  const htmlBefore = htmlPath && fs.existsSync(htmlPath) ? readFile(htmlPath) : ''
+  const { tsOut, htmlOut } = processComponent(before, htmlBefore, tsPath)
+  const changedTs = tsOut !== before
+  const changedHtml = htmlPath ? (htmlOut !== htmlBefore) : false
+  if (changedTs) writeFile(tsPath, tsOut)
+  if (htmlPath && changedHtml) writeFile(htmlPath, htmlOut)
+  const aliases: string[] = []
+  return { changed: changedTs || changedHtml, code: tsOut, aliases, htmlPath }
 }
 
-function collectHtmlAliases(tsPath: string): string[] {
-  try {
-    const code = readFile(tsPath)
-    const sf = ts.createSourceFile('c.ts', code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
-    const aliases = collectVarAliases(sf, config.fallbackServiceParamName, config.getLocalMethod)
-    const names = new Set<string>()
-    for (const a of aliases) names.add(a.name)
-    const rx = new RegExp(`\\b([A-Za-z_]\\w*)\\s*=\\s*this\\.${config.fallbackServiceParamName}\\.${config.getLocalMethod}\\s*\\(`, 'g')
-    let m: RegExpExecArray | null
-    while ((m = rx.exec(code))) names.add(m[1])
-    if (/\bi18n\s*:\s*/.test(code) || /this\.i18n\s*=/.test(code)) names.add('i18n')
-    if (/\bdict\s*:\s*/.test(code) || /this\.dict\s*=/.test(code)) names.add('dict')
-    return Array.from(names)
-  } catch { return [] }
-}
+// 旧 HTML 别名收集删除，统一由 component.ts 内部实现
 
-function processHtmlWithAliases(htmlPath: string, mode: 'replace' | 'restore', aliasInfos: Array<{ name: string; roots?: string[]; prefix?: string | null }>): { changed: boolean } {
+function processHtmlRestore(htmlPath: string, alias: string | null): { changed: boolean } { // 仅在 restore 模式使用
   const before = readFile(htmlPath)
-  const aliasNames = aliasInfos.map(a => a.name)
-  const alias = aliasNames.includes('i18n') ? 'i18n' : (aliasNames[0] || null)
-  const after = mode === 'restore' ? restoreHtmlContent(before, alias) : replaceHtmlContent(before, aliasInfos)
+  const after = restoreHtmlContent(before, alias)
   if (after !== before) writeFile(htmlPath, after)
   return { changed: after !== before }
 }
@@ -368,73 +292,42 @@ function emitJson(dictDir: string, outDir: string, langs: string[], arrayMode: '
   }
 }
 
-function main() { // CLI 主入口
+function main() { // CLI 主入口（仅允许 --mode，其余参数从 omrp.config.json 读取）
   const args = process.argv.slice(2) // 读取参数
-  let dir = process.cwd() // 默认目录为当前工作目录
-  let mode: 'replace' | 'restore' = 'replace' // 默认模式为替换
-  let logLevel: 'debug' | 'info' | 'warn' | 'error' | undefined
-  let outFormat: 'json' | 'pretty' | undefined
-  const usage = `Usage: i18n-refactor [--dir=PATH] [--mode=replace|restore] [--dictDir=PATH] [--dry-run] [--logLevel=debug|info|warn|error] [--format=json|pretty] [--config=PATH] [--help] [--version]`
-  const version = '0.1.0'
-  let exec: 'bootstrap' | null = null
+  let mode: 'replace' | 'restore' | 'bootstrap' = 'replace' // 默认模式
+  const usage = `Usage: i18n-refactor [--mode=replace|restore|bootstrap] [--help] [--version]`
+  const version = '0.2.0'
   for (const a of args) { // 解析参数
-    const m = a.match(/^--dir=(.+)$/) // 指定目录
-    if (m) dir = path.isAbsolute(m[1]) ? m[1] : path.join(process.cwd(), m[1]) // 解析绝对/相对路径
-    const r = a.match(/^--mode=(replace|restore)$/) // 指定模式
-    if (r) mode = r[1] as any // 设置模式
-    const d = a.match(/^--dictDir=(.+)$/) // 指定字典目录
-    if (d) setDictDir(d[1]) // 设置目录
-    const dl = a.match(/^--logLevel=(debug|info|warn|error)$/)
-    if (dl) logLevel = dl[1] as any
-    const fm = a.match(/^--format=(json|pretty)$/)
-    if (fm) outFormat = fm[1] as any
-    if (a === '--dry-run') dryRun = true
-    const cf = a.match(/^--config=(.+)$/)
-    if (cf) {
-      try {
-        const p = path.isAbsolute(cf[1]) ? cf[1] : path.join(process.cwd(), cf[1])
-        const txt = fs.readFileSync(p, 'utf8')
-        const obj = JSON.parse(txt)
-        if (obj.serviceTypeName) (config as any).serviceTypeName = obj.serviceTypeName
-        if (obj.getLocalMethod) (config as any).getLocalMethod = obj.getLocalMethod
-        if (obj.fallbackServiceParamName) (config as any).fallbackServiceParamName = obj.fallbackServiceParamName
-        if (obj.tsGetHelperName) (config as any).tsGetHelperName = obj.tsGetHelperName
-        if (obj.dictDir) (config as any).dictDir = obj.dictDir
-        if (obj.languages) (config as any).languages = obj.languages
-        if (obj.jsonOutDir) (config as any).jsonOutDir = obj.jsonOutDir
-        if (obj.jsonArrayMode) (config as any).jsonArrayMode = obj.jsonArrayMode
-        if (obj.ensureAngular) (config as any).ensureAngular = obj.ensureAngular
-        info('config loaded', { path: p })
-      } catch (e) {
-        warn('config load failed', {})
-      }
-    }
-    const ex = a.match(/^--exec=(bootstrap)$/)
-    if (ex) exec = ex[1] as any
+    const r = a.match(/^--mode=(replace|restore|bootstrap)$/)
+    if (r) mode = r[1] as any
     if (a === '--help') { process.stdout.write(usage + '\n'); return }
     if (a === '--version') { process.stdout.write(version + '\n'); return }
   }
-  configureLogger({ level: logLevel, format: outFormat })
-  info('start', { dir, mode, dryRun })
-  if (exec === 'bootstrap') {
+  dryRun = !!config.dryRun
+  configureLogger({ level: config.logLevel, format: config.format })
+  setDictDir(config.dictDir || 'src/app/i18n')
+  info('start', { dir: config.dir, mode, dryRun })
+  if (mode === 'bootstrap') {
     ensureAngularFiles(config.dictDir || 'src/app/i18n', (config.ensureAngular || 'fix'))
     emitJson(config.dictDir || 'src/app/i18n', (config.jsonOutDir || 'i18n-refactor/out'), (config.languages || ['zh','en']), (config.jsonArrayMode || 'nested'))
     return
   }
+  const dir = config.dir || process.cwd()
   const tsFiles = walk(dir, p => p.endsWith('.ts')) // 收集 TS 文件
   const results: Array<{ file: string; type: 'ts'|'html'; changed: boolean }> = [] // 结果列表
   for (const f of tsFiles) { // 遍历 TS
     const r = processTsFile(f) // 处理 TS 文件
     results.push({ file: f, type: 'ts', changed: r.changed }) // 记录结果
     if (r.htmlPath && fs.existsSync(r.htmlPath)) { // 若关联模板存在
-      const aliasInfos = buildAliases(r.code) // 基于替换后 TS 构建别名信息
-      const hr = processHtmlWithAliases(r.htmlPath, mode, aliasInfos) // 处理模板
-      results.push({ file: r.htmlPath, type: 'html', changed: hr.changed }) // 记录结果
+      if (mode === 'restore') {
+        const hr = processHtmlRestore(r.htmlPath, 'i18n')
+        results.push({ file: r.htmlPath, type: 'html', changed: hr.changed })
+      }
     }
   }
   const changed = results.filter(r => r.changed).length // 统计变更数
   const summary = { dir, files: results.length, changed, missingKeys: missingKeyCount } // 汇总信息
-  if ((outFormat || 'json') === 'json') process.stdout.write(JSON.stringify({ summary, results }, null, 2) + '\n')
+  if ((config.format || 'json') === 'json') process.stdout.write(JSON.stringify({ summary, results }, null, 2) + '\n')
   else {
     info('summary', summary)
     for (const r of results) info('result', r)

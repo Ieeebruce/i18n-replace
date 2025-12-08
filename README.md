@@ -53,19 +53,13 @@ To get more help on the Angular CLI use `ng help` or go check out the [Angular C
   - `node i18n-refactor/dist/src/runner/run-dir.js --dir=src --mode=restore`
 
 ### 命令参数
-- `--dir=PATH`：要处理的目录（默认当前工作目录）。
-- `--mode=replace|restore|bootstrap`：
+- 仅支持 `--mode=replace|restore|bootstrap`：
   - `bootstrap`: 初始化环境（生成 Service/Pipe、全局导入）并导出 JSON。
-  - `replace`: 执行代码替换（默认）。
+  - `replace`: 执行代码替换。
   - `restore`: 还原代码。
-- `--dictDir=PATH`：指定字典目录（覆盖自动探测）。默认会尝试：`src/app/i18n`、`srcbak/app/i18n`。
-- `--dry-run`：干运行，只输出不写文件。
-- `--logLevel=debug|info|warn|error`：日志级别（默认 `info`）。
-- `--format=json|pretty`：输出格式（默认 `json`）。
-- `--config=PATH`：加载外部配置 JSON 覆盖默认行为（示例见下）。
-- `--help`、`--version`：显示帮助与版本。
+- 其他参数均从固定配置文件读取，详见下文。
 
-### 外部配置示例（`i18n.config.json`）
+### 固定配置文件（项目根 `omrp.config.json`）
 ```
 {
   "serviceTypeName": "I18nLocaleService",
@@ -76,21 +70,30 @@ To get more help on the Angular CLI use `ng help` or go check out the [Angular C
   "languages": ["zh", "en"],
   "jsonOutDir": "i18n-refactor/out",
   "jsonArrayMode": "nested",
-  "ensureAngular": "fix"
+  "ensureAngular": "fix",
+  "dir": "src",
+  "dryRun": false,
+  "logLevel": "info",
+  "format": "json"
 }
 ```
-- 基本配置：
-  - `serviceTypeName` 等：与默认配置一致时可省略。
-- 路径与导出配置：
-  - `dictDir`: TS 字典源目录。
-  - `languages`: 要处理的语言列表。
-  - `jsonOutDir`: JSON 导出目录。
-  - `jsonArrayMode`: 数组处理模式。
-    - `"nested"`: 保持数组结构（默认）。
-    - `"flat"`: 展开为对象（如 `list.0: "Item A"`）。
-  - `ensureAngular`: Angular 环境修复策略。
-    - `"fix"`: 自动创建缺失文件并导入（默认）。
-    - `"report"`: 仅报告缺失。
+- 字段说明：
+  - 基本：`serviceTypeName`、`getLocalMethod`、`fallbackServiceParamName`、`tsGetHelperName`。
+  - 路径与导出：
+   - `dictDir`: TS 字典源目录。
+   - `languages`: 要处理的语言列表。
+   - `jsonOutDir`: JSON 导出目录。
+   - `jsonArrayMode`: 数组处理模式。
+     - `"nested"`: 保持数组结构（默认）。
+     - `"flat"`: 展开为对象（如 `list.0: "Item A"`）。
+   - `ensureAngular`: Angular 环境修复策略。
+     - `"fix"`: 自动创建缺失文件并导入（默认）。
+     - `"report"`: 仅报告缺失。
+  - 运行：
+    - `dir`: 要处理的目录（如 `src`）。
+    - `dryRun`: 是否干运行（不落盘）。
+    - `logLevel`: 日志级别。
+    - `format`: 输出格式。
 
 ### 字典目录约定
 - 默认在项目根下查找 `src/app/i18n/zh.ts` 与 `src/app/i18n/en.ts`（也尝试 `srcbak/app/i18n`）。
