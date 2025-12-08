@@ -1,6 +1,6 @@
 <section class="layout">
   <aside class="sidebar">
-    <h3 class="menu-title">{{ 'app.title' | i18n}}</h3>
+    <h3 class="menu-title">{{ i18n.app.title }}</h3>
     <nav class="menu">
       <a [routerLink]="['/']" routerLinkActive="active">Home</a>
       <a [routerLink]="['/alias']" routerLinkActive="active">Alias</a>
@@ -11,7 +11,7 @@
   <section class="page">
 <main class="main">
   <section class="section-pad">
-    <h1>{{ 'app.title' | i18n }}</h1>
+    <h1>{{ i18n.app.title }}</h1>
     <router-outlet></router-outlet>
   </section>
 </main>

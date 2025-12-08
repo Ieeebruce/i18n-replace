@@ -2,25 +2,26 @@ import { Component } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { FormsModule } from '@angular/forms'
 import { I18nLocaleService } from '../../i18n';
-import { I18nPipe } from '../../i18n/i18n.pipe';
 
 type TodoItem = { id: number; text: string; done: boolean }
 
 @Component({
   selector: 'app-todolist',
   standalone: true,
-  imports: [CommonModule, FormsModule, I18nPipe],
+  imports: [CommonModule, FormsModule],
   templateUrl: './todolist.component.html',
   styleUrl: './todolist.component.scss'
 })
 export class TodolistComponent {
+  i18n: any
   items: TodoItem[] = []
   input = ''
   filter: 'all' | 'active' | 'completed' = 'all'
   nextId = 1
   title: any;
-constructor(public i18n: I18nLocaleService) {
-  this.title = this.i18n.get('app.title')
+constructor(private locale: I18nLocaleService) {
+  this.i18n = this.locale.getLocale();
+  this.title = this.i18n.app.title
 }
   ngOnInit() {
     const s = localStorage.getItem('todo.items')

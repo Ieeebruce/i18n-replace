@@ -12,7 +12,7 @@ import { I18nLocaleService } from '../i18n'
   styleUrl: './layout.component.scss'
 })
 export class LayoutComponent {
-  constructor(public i18n: I18nLocaleService) {}
-  switch(lang: 'en' | 'zh') { this.i18n.setLang(lang) }
+  constructor(public locale: I18nLocaleService) {}
+  switch(lang: 'en' | 'zh') { this.locale.setLang(lang) }
 }
 

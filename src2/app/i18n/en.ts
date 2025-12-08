@@ -1,30 +1,38 @@
 export const en = {
-  'app.title': 'Angular I18n (TS Object) Demo',
-  'app.description': 'Terms defined in TypeScript, referenced as object properties.',
-  'app.switchToEn': 'Switch to English',
-  'app.switchToZh': 'Switch to Chinese',
-  'app.footer': 'Footer',
-  'app.header': 'App Header Override',
-  'app.onlyApp': 'Only App',
-  'app.common.desc': 'Common description overridden by App',
-  'app.shared.label': 'App Label Override',
-  'app.settings.theme': 'App Theme',
-  'app.user.greetTpl': 'App Hello, {name}!',
-  'app.app.desc': 'App Description',
-  'common.common.title': 'Common Title',
-  'common.common.desc': 'Common Description',
-  'common.header': 'Common Header',
-  'common.footer': 'Common Footer',
-  'common.onlyCommon': 'Only Common',
-  'common.shared.label': 'Common Label',
-  'common.settings.theme': 'Default Theme',
-  'common.user.greetTpl': 'Hello, {name}!',
-  'home.welcome': 'Welcome!',
-  'home.title': 'Home',
-  'list.items.0': 'Item 1',
-  'list.items.1': 'Item 2',
-  'list.items.2': 'Item 3',
-  'templates.info': 'Hello, {name}. You have {count} notifications.',
-  'templates.itemTpl': 'Index {index}: {value}',
-  'user.greetTpl': 'Hello, {name}!'
+  app: {
+    title: 'Angular i18n (TS objects) demo',
+    description: 'Translations are defined in TypeScript and referenced via objects.',
+    switchToEn: 'Switch to English',
+    switchToZh: '切换到中文',
+    footer: 'Footer',
+    header: 'App header override',
+    onlyApp: 'Only in app',
+    common: { desc: 'App overrides common description' },
+    shared: { label: 'App label override' },
+    settings: { theme: 'App theme' },
+    user: { greetTpl: 'App hi, {name}!'},
+    app: { desc: 'App description' }
+  },
+  common: {
+    common: { title: 'Common title', desc: 'Common description' },
+    header: 'Common header',
+    footer: 'Common footer',
+    onlyCommon: 'Only in common',
+    shared: { label: 'Common label' },
+    settings: { theme: 'Default theme' },
+    user: { greetTpl: 'Hi, {name}!'}
+  },
+  home: {
+    welcome: 'Welcome!'
+  },
+  list: {
+    items: ['Item A', 'Item B', 'Item C']
+  },
+  templates: {
+    info: 'Hello, {name}. You have {count} notifications.',
+    itemTpl: 'Index {index}: {value}'
+  },
+  user: {
+    greetTpl: 'Hi, {name}!'
+  }
 } as const
