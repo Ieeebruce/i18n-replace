@@ -9,17 +9,19 @@ TARGET_HTML="src/app/examples/todolist/todolist.component.html"
 echo ">>> Building i18n-refactor..."
 npm run i18n-refactor:build
 
+echo ">>> [Step 0] Prepare"
+# delete src2, copy src to src2
+rm -rf src2
+cp -r src src2
+
 echo ">>> [Step 1] Bootstrap..."
-# Clean up potential previous runs
-rm -f src/app/i18n/index.ts src/app/i18n/i18n.pipe.ts
-rm -rf i18n-refactor/out
 
 $I18N_CLI --mode=bootstrap
 
 # Verify
 if [ ! -f "src/app/i18n/index.ts" ]; then echo "❌ Service missing"; exit 1; fi
 if [ ! -f "src/app/i18n/i18n.pipe.ts" ]; then echo "❌ Pipe missing"; exit 1; fi
-if [ ! -f "i18n-refactor/out/zh.json" ]; then echo "❌ JSON export missing"; exit 1; fi
+if [ ! -f "src2/src/i18n/default/zh.json" ]; then echo "❌ JSON export missing"; exit 1; fi
 echo "✅ Bootstrap verification passed"
 
 echo ">>> [Step 2] Replace..."
@@ -35,17 +37,7 @@ else
   echo "⚠️ No replacement detected in $TARGET_FILE (Maybe no matching keys?)"
 fi
 
-echo ">>> [Step 3] Restore..."
-$I18N_CLI --mode=restore
+# 替换完成后 启动src2
 
-# Verify
-if ! grep -q "i18nGet" "$TARGET_FILE"; then
-  echo "✅ Restore verification passed (markers removed)"
-else
-  echo "❌ Restore verification failed: markers still present in $TARGET_FILE"
-  # Optional: show the lines that failed
-  grep "i18nGet" "$TARGET_FILE"
-  exit 1
-fi
+npm run start:src2
 
-echo "🎉 All tests passed!"

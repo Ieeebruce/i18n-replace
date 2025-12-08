@@ -16,6 +16,7 @@ function walk(dir: string, filter: (p: string) => boolean): string[] { // 递归
   const out: string[] = [] // 输出文件列表
   const entries = fs.readdirSync(dir, { withFileTypes: true }) // 读取目录条目
   for (const e of entries) { // 遍历条目
+    if (e.name === 'node_modules' || e.name === '.git') continue // 忽略 node_modules 和 .git
     const full = path.join(dir, e.name) // 计算完整路径
     if (e.isDirectory()) out.push(...walk(full, filter)) // 目录则递归
     else if (filter(full)) out.push(full) // 文件且匹配过滤器则加入
