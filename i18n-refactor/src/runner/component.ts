@@ -251,7 +251,8 @@ export function processComponent(tsCode: string, htmlCode: string, filePath?: st
     let p = params // 参数文本
     const svc = config.serviceTypeName
     const prm = config.fallbackServiceParamName
-    p = p.replace(new RegExp(`\\b(private|public)?\\s*${prm}\\s*:\\s*${svc}\\b`), `public i18n: ${svc}`) // 替换旧依赖
+    // 确保只替换参数名，避免误伤同名属性/方法
+    p = p.replace(new RegExp(`\\b(private|public)?\\s*${prm}\\s*:\\s*${svc}\\b(?!\\s*[,)])`), `public i18n: ${svc}`) // 替换旧依赖
     return `constructor(${p})` // 返回构造函数头
   })
   

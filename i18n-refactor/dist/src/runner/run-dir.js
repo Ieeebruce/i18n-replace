@@ -45,6 +45,8 @@ function walk(dir, filter) {
     const out = []; // 输出文件列表
     const entries = fs.readdirSync(dir, { withFileTypes: true }); // 读取目录条目
     for (const e of entries) { // 遍历条目
+        if (e.name === 'node_modules' || e.name === '.git')
+            continue; // 忽略 node_modules 和 .git
         const full = path.join(dir, e.name); // 计算完整路径
         if (e.isDirectory())
             out.push(...walk(full, filter)); // 目录则递归
@@ -110,130 +112,6 @@ function restoreHtmlContent(src, alias) {
     });
     return s;
 }
-function collectGetLocalVars(tsCode) {
-    const names = new Set();
-    const re = new RegExp(`this\\.([A-Za-z_]\\w*)\\s*=\\s*[^;]*\\.${config_1.config.getLocalMethod}\\([^)]*\\)`, 'g');
-    let m;
-    while ((m = re.exec(tsCode)))
-        names.add(m[1]);
-    return Array.from(names);
-}
-/*
-function buildAliases(tsCode: string): Array<{ name: string; prefix: string | null; roots?: string[] }> {
-  const sf = ts.createSourceFile('x.ts', tsCode, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
-  const aliases = collectVarAliases(sf, config.fallbackServiceParamName, config.getLocalMethod)
-  const out: Array<{ name: string; prefix: string | null; roots?: string[] }> = []
-  for (const a of aliases) out.push({ name: a.name, prefix: a.prefix, roots: a.roots })
-  const rx = new RegExp(`\\b([A-Za-z_]\\w*)\\s*=\\s*this\\.${config.fallbackServiceParamName}\\.${config.getLocalMethod}\\s*\\(`, 'g')
-  let m: RegExpExecArray | null
-  while ((m = rx.exec(tsCode))) out.push({ name: m[1], prefix: null })
-  if (/this\.i18n\./.test(tsCode) && !out.find(x => x.name === 'i18n')) out.push({ name: 'i18n', prefix: null })
-  if (/this\.dict\./.test(tsCode) && !out.find(x => x.name === 'dict')) out.push({ name: 'dict', prefix: null })
-  // 不再将所有 this.<name>. 视为别名，避免误替换普通对象/数组方法
-  return Array.from(new Set(out.map(o => JSON.stringify(o)))).map(s => JSON.parse(s))
-}
-
-function replaceTsContent(src: string): string {
-  let s = src
-  const aliases = buildAliases(src)
-  // AST-based replacement for plain property chains this.<alias>.<path>
-  const sfAst = ts.createSourceFile('x.ts', s, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
-  type Rep = { s: number; e: number; text: string }
-  const reps: Rep[] = []
-  const info = new Map<string, { prefix: string | null; roots?: string[] }>()
-  for (const a of aliases) info.set(a.name, { prefix: a.prefix, roots: a.roots })
-  const composeAstKey = (a: { prefix: string | null; roots?: string[] }, path: string) => {
-    if (a.prefix) return `${a.prefix}.${path}`
-    if (a.roots && a.roots.length) { const r = pickRoot(a.roots, path); return r ? `${r}.${path}` : path }
-    return path
-  }
-  const auditStaticKey = (a: { prefix: string | null; roots?: string[] }, path: string) => {
-    let root = ''
-    if (a.prefix) { const seg = a.prefix.split('.')[0]; root = seg }
-    else if (a.roots && a.roots.length) root = pickRoot(a.roots, path)
-    if (root) { const ok = hasKey(root, path); if (!ok) { missingKeyCount++; warn('missing i18n key', { root, path }) } }
-  }
-  const visitAst = (node: ts.Node) => {
-    if (ts.isPropertyAccessExpression(node)) {
-      let outer: ts.PropertyAccessExpression = node
-      while (ts.isPropertyAccessExpression(outer.parent) && outer.parent.expression === outer) outer = outer.parent
-      let cur: ts.Expression = outer
-      const segs: string[] = []
-      while (ts.isPropertyAccessExpression(cur)) { segs.unshift(cur.name.getText(sfAst)); cur = cur.expression }
-      if (ts.isPropertyAccessExpression(cur) && cur.expression.kind === ts.SyntaxKind.ThisKeyword && ts.isIdentifier(cur.name)) {
-        const aliasName = cur.name.getText(sfAst)
-        const ai = info.get(aliasName)
-        if (ai) {
-          const p = outer.parent
-          const isCall = ts.isCallExpression(p) && p.expression === outer
-          const isEl = ts.isElementAccessExpression(p) && p.expression === outer
-          const isAssignLHS = ts.isBinaryExpression(p) && p.left === outer
-          const isReplaceChain = ts.isPropertyAccessExpression(p) && p.name.getText(sfAst) === 'replace'
-          if (!isCall && !isEl && !isAssignLHS && !isReplaceChain) {
-            const path = segs.join('.')
-            const text = renderTsGet(aliasName, { keyExpr: composeAstKey(ai, path) })
-            auditStaticKey(ai, path)
-            reps.push({ s: outer.getStart(sfAst), e: outer.getEnd(), text })
-          }
-        }
-      }
-    }
-    ts.forEachChild(node, visitAst)
-  }
-  visitAst(sfAst)
-  if (reps.length) {
-    reps.sort((a, b) => b.s - a.s)
-    for (const r of reps) s = s.slice(0, r.s) + r.text + s.slice(r.e)
-  }
-  for (const a of aliases) {
-    const name = a.name
-    const composeKey = (path: string) => {
-      if (a.prefix) return `${a.prefix}.${path}`
-      if (a.roots && a.roots.length) {
-        const r = pickRoot(a.roots, path)
-        return r ? `${r}.${path}` : path
-      }
-      return path
-    }
-    // chain .replace()
-  s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)((?:\\.replace\\([^)]*\\))+)`, 'g'), (_m, path, chain) => {
-    const params = extractReplaceParams(chain)
-    auditStaticKey(a, String(path))
-    return renderTsGet(name, { keyExpr: composeKey(String(path)), params })
-  })
-    // element access with string literal '...'
-  s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)\\s*\\[\\s*'([^']+)'\\s*\\]`, 'g'), (_m, base, lit) => {
-    auditStaticKey(a, String(base) + '.' + String(lit))
-    return renderTsGet(name, { keyExpr: composeKey(`${String(base)}.${String(lit)}`) })
-  })
-    // element access with string literal "..."
-  s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)\\s*\\[\\s*\"([^\"]+)\"\\s*\\]`, 'g'), (_m, base, lit) => {
-    auditStaticKey(a, String(base) + '.' + String(lit))
-    return renderTsGet(name, { keyExpr: composeKey(`${String(base)}.${String(lit)}`) })
-  })
-    // dynamic element access [expr]
-  s = s.replace(new RegExp(`this\\.${name}\\.([A-Za-z0-9_.]+)\\s*\\[([^\\]]+)\\]`, 'g'), (_m, base, expr) => {
-    const basePath = composeKey(String(base))
-    return renderTsGet(name, { keyExpr: `'${basePath}.' + ${String(expr).trim()}` })
-  })
-  }
-  // Fallback: plain property chains not followed by call/replace/[ or assignment
-  for (const a of aliases) {
-    const name = a.name
-    const composeKey = (path: string) => {
-      if (a.prefix) return `${a.prefix}.${path}`
-      if (a.roots && a.roots.length) { const r = pickRoot(a.roots, path); return r ? `${r}.${path}` : path }
-      return path
-    }
-  s = s.replace(new RegExp(`this\\.${name}\\.(?!get\\b)([A-Za-z0-9_.]+)(?!\\s*\\(|\\s*\\.replace|\\s*\\[|\\s*=)`, 'g'), (_m, path) => {
-    auditStaticKey(a, String(path))
-    return renderTsGet(name, { keyExpr: composeKey(String(path)) })
-  })
-  }
-  return s
-}
-
-*/
 function processTsFile(tsPath) {
     const before = readFile(tsPath);
     const sf = typescript_1.default.createSourceFile(tsPath, before, typescript_1.default.ScriptTarget.Latest, true, typescript_1.default.ScriptKind.TS);
