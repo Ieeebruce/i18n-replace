@@ -5,6 +5,7 @@ export function pruneUnused(_sf: ts.SourceFile, code: string, varNames: string[]
   const file = ts.createSourceFile('x.ts', code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
   const del: Array<{ s: number; e: number }> = []
   const set = new Set(varNames)
+  const assignedLocaleNames = new Set<string>()
   const hasGetLocaleCall = (node: ts.Node): boolean => {
     let hit = false
     const walk = (n: ts.Node) => {
@@ -25,10 +26,12 @@ export function pruneUnused(_sf: ts.SourceFile, code: string, varNames: string[]
   const visit = (node: ts.Node) => {
     if (ts.isPropertyDeclaration(node)) {
       const id = ts.isIdentifier(node.name) ? node.name.text : ''
-      if (id && set.has(id)) {
-        if (!node.initializer || hasGetLocaleCall(node.initializer)) {
-          del.push({ s: node.getStart(file), e: node.getEnd() })
-        }
+      if (!id) {
+        // no-op
+      } else if (id === 'i18n') {
+        del.push({ s: node.getStart(file), e: node.getEnd() })
+      } else if (assignedLocaleNames.has(id) || (node.initializer && hasGetLocaleCall(node.initializer))) {
+        del.push({ s: node.getStart(file), e: node.getEnd() })
       }
     }
     if (ts.isExpressionStatement(node)) {
@@ -38,6 +41,11 @@ export function pruneUnused(_sf: ts.SourceFile, code: string, varNames: string[]
         if (/this\.(?:i18n)\.get\s*\(/.test(rhsText)) {
           // keep
         } else if (hasGetLocaleCall(be.right)) {
+          const left = be.left
+          if (ts.isPropertyAccessExpression(left) && left.expression.kind === ts.SyntaxKind.ThisKeyword) {
+            const id = left.name.getText(file)
+            assignedLocaleNames.add(id)
+          }
           del.push({ s: node.getStart(file), e: node.getEnd() })
         }
       }

@@ -9,6 +9,8 @@ function pruneUnused(_sf, code, varNames) {
     // console.log('Pruning vars:', varNames)
     const file = typescript_1.default.createSourceFile('x.ts', code, typescript_1.default.ScriptTarget.Latest, true, typescript_1.default.ScriptKind.TS);
     const del = [];
+    const set = new Set(varNames);
+    const assignedLocaleNames = new Set();
     const hasGetLocaleCall = (node) => {
         let hit = false;
         const walk = (n) => {
@@ -31,7 +33,14 @@ function pruneUnused(_sf, code, varNames) {
     };
     const visit = (node) => {
         if (typescript_1.default.isPropertyDeclaration(node)) {
-            if (node.initializer && hasGetLocaleCall(node.initializer)) {
+            const id = typescript_1.default.isIdentifier(node.name) ? node.name.text : '';
+            if (!id) {
+                // no-op
+            }
+            else if (id === 'i18n') {
+                del.push({ s: node.getStart(file), e: node.getEnd() });
+            }
+            else if (assignedLocaleNames.has(id) || (node.initializer && hasGetLocaleCall(node.initializer))) {
                 del.push({ s: node.getStart(file), e: node.getEnd() });
             }
         }
@@ -43,6 +52,11 @@ function pruneUnused(_sf, code, varNames) {
                     // keep
                 }
                 else if (hasGetLocaleCall(be.right)) {
+                    const left = be.left;
+                    if (typescript_1.default.isPropertyAccessExpression(left) && left.expression.kind === typescript_1.default.SyntaxKind.ThisKeyword) {
+                        const id = left.name.getText(file);
+                        assignedLocaleNames.add(id);
+                    }
                     del.push({ s: node.getStart(file), e: node.getEnd() });
                 }
             }

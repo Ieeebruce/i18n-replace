@@ -350,8 +350,6 @@ export function processComponent(tsCode: string, htmlCode: string, filePath?: st
   
   // Cleanup blank lines
   tsOut = tsOut.replace(/(\r?\n){3,}/g, '\n\n')
-  // Remove conflicting property declaration i18n: any;
-  tsOut = tsOut.replace(/\bi18n\s*:\s*any\s*;/g, '')
   
   const htmlAliases = buildAliases(tsCode) // 基于原 TS 收集用于 HTML 的别名
   const htmlOut = replaceHtml(htmlCode, htmlAliases) // 替换模板
