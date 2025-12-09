@@ -51,7 +51,13 @@ function collectVarAliases(sf, serviceParamName, getLocalMethod) {
             }
             else if (typescript_1.default.isCallExpression(node.initializer) && isGetLocalCall(sf, node.initializer, serviceParamName, getLocalMethod)) {
                 if (node.name && typescript_1.default.isIdentifier(node.name)) {
-                    addAlias(node.name.getText(sf));
+                    const a = addAlias(node.name.getText(sf));
+                    if (node.initializer.arguments.length > 0) {
+                        const arg = node.initializer.arguments[0];
+                        if (typescript_1.default.isStringLiteral(arg)) {
+                            a.prefix = arg.text;
+                        }
+                    }
                 }
             }
         }
@@ -119,7 +125,13 @@ function collectVarAliases(sf, serviceParamName, getLocalMethod) {
                                 }
                             }
                             else if (typescript_1.default.isCallExpression(be.right) && isGetLocalCall(sf, be.right, serviceParamName, getLocalMethod)) {
-                                addAlias(nm);
+                                const a = addAlias(nm);
+                                if (be.right.arguments.length > 0) {
+                                    const arg = be.right.arguments[0];
+                                    if (typescript_1.default.isStringLiteral(arg)) {
+                                        a.prefix = arg.text;
+                                    }
+                                }
                             }
                             if (typescript_1.default.isObjectLiteralExpression(be.right)) { // 右侧为对象字面量（合并）
                                 const spreads = be.right.properties.filter(p => typescript_1.default.isSpreadAssignment(p)); // 展开项

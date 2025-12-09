@@ -21,35 +21,24 @@ export function pruneUnused(_sf: ts.SourceFile, code: string, varNames: string[]
     walk(node)
     return hit
   }
-  const isAliasAccess = (node: ts.Node): boolean => {
-    if (ts.isPropertyAccessExpression(node)) {
-      if (node.expression.kind === ts.SyntaxKind.ThisKeyword) return set.has(node.name.getText(file))
-      return isAliasAccess(node.expression)
-    }
-    return false
-  }
-  const isAliasGetCall = (node: ts.Node): boolean => {
-    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
-      if (node.expression.name.text === 'get' &&
-          ts.isPropertyAccessExpression(node.expression.expression) &&
-          node.expression.expression.expression.kind === ts.SyntaxKind.ThisKeyword) {
-        return set.has(node.expression.expression.name.getText(file))
-      }
-    }
-    return false
-  }
+  
   const visit = (node: ts.Node) => {
     if (ts.isPropertyDeclaration(node)) {
       const id = ts.isIdentifier(node.name) ? node.name.text : ''
-      if (id && set.has(id)) del.push({ s: node.getStart(file), e: node.getEnd() })
+      if (id && set.has(id)) {
+        if (!node.initializer || hasGetLocaleCall(node.initializer)) {
+          del.push({ s: node.getStart(file), e: node.getEnd() })
+        }
+      }
     }
     if (ts.isExpressionStatement(node)) {
       const be = node.expression
       if (ts.isBinaryExpression(be) && be.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
-        const left = be.left
-        if (ts.isPropertyAccessExpression(left) && left.expression.kind === ts.SyntaxKind.ThisKeyword) {
-          const id = left.name.getText(file)
-          if (set.has(id) && (hasGetLocaleCall(be.right) || isAliasAccess(be.right) || isAliasGetCall(be.right))) del.push({ s: node.getStart(file), e: node.getEnd() })
+        const rhsText = be.right.getText(file)
+        if (/this\.(?:i18n)\.get\s*\(/.test(rhsText)) {
+          // keep
+        } else if (hasGetLocaleCall(be.right)) {
+          del.push({ s: node.getStart(file), e: node.getEnd() })
         }
       }
     }

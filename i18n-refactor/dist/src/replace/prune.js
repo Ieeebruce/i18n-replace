@@ -9,7 +9,6 @@ function pruneUnused(_sf, code, varNames) {
     // console.log('Pruning vars:', varNames)
     const file = typescript_1.default.createSourceFile('x.ts', code, typescript_1.default.ScriptTarget.Latest, true, typescript_1.default.ScriptKind.TS);
     const del = [];
-    const set = new Set(varNames);
     const hasGetLocaleCall = (node) => {
         let hit = false;
         const walk = (n) => {
@@ -30,38 +29,21 @@ function pruneUnused(_sf, code, varNames) {
         walk(node);
         return hit;
     };
-    const isAliasAccess = (node) => {
-        if (typescript_1.default.isPropertyAccessExpression(node)) {
-            if (node.expression.kind === typescript_1.default.SyntaxKind.ThisKeyword)
-                return set.has(node.name.getText(file));
-            return isAliasAccess(node.expression);
-        }
-        return false;
-    };
-    const isAliasGetCall = (node) => {
-        if (typescript_1.default.isCallExpression(node) && typescript_1.default.isPropertyAccessExpression(node.expression)) {
-            if (node.expression.name.text === 'get' &&
-                typescript_1.default.isPropertyAccessExpression(node.expression.expression) &&
-                node.expression.expression.expression.kind === typescript_1.default.SyntaxKind.ThisKeyword) {
-                return set.has(node.expression.expression.name.getText(file));
-            }
-        }
-        return false;
-    };
     const visit = (node) => {
         if (typescript_1.default.isPropertyDeclaration(node)) {
-            const id = typescript_1.default.isIdentifier(node.name) ? node.name.text : '';
-            if (id && set.has(id))
+            if (node.initializer && hasGetLocaleCall(node.initializer)) {
                 del.push({ s: node.getStart(file), e: node.getEnd() });
+            }
         }
         if (typescript_1.default.isExpressionStatement(node)) {
             const be = node.expression;
             if (typescript_1.default.isBinaryExpression(be) && be.operatorToken.kind === typescript_1.default.SyntaxKind.EqualsToken) {
-                const left = be.left;
-                if (typescript_1.default.isPropertyAccessExpression(left) && left.expression.kind === typescript_1.default.SyntaxKind.ThisKeyword) {
-                    const id = left.name.getText(file);
-                    if (set.has(id) && (hasGetLocaleCall(be.right) || isAliasAccess(be.right) || isAliasGetCall(be.right)))
-                        del.push({ s: node.getStart(file), e: node.getEnd() });
+                const rhsText = be.right.getText(file);
+                if (/this\.(?:i18n)\.get\s*\(/.test(rhsText)) {
+                    // keep
+                }
+                else if (hasGetLocaleCall(be.right)) {
+                    del.push({ s: node.getStart(file), e: node.getEnd() });
                 }
             }
         }

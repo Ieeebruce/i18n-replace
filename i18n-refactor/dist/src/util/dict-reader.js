@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.setDictDir = exports.pickRoot = exports.hasKey = void 0;
+exports.setDictDir = exports.pickRoot = exports.getAllRoots = exports.hasKey = exports.setMockDict = void 0;
 const fs = __importStar(require("fs")); // 引入文件系统模块，用于读取字典文件
 const path = __importStar(require("path")); // 引入路径模块，用于拼接与解析目录
 const typescript_1 = __importDefault(require("typescript"));
@@ -133,14 +133,30 @@ function buildDictMap() {
     }
     return map; // 返回结果
 }
-const cache = { map: null }; // 简单缓存，避免重复解析字典
+const cache = { map: null, mock: null }; // 简单缓存，避免重复解析字典
+function setMockDict(map) {
+    cache.mock = map;
+}
+exports.setMockDict = setMockDict;
 function hasKey(root, pathInRoot) {
+    if (cache.mock) {
+        const set = cache.mock[root];
+        return !!set && set.has(pathInRoot);
+    }
     if (!cache.map)
         cache.map = buildDictMap(); // 延迟构建映射
     const set = cache.map[root]; // 取根集合
     return !!set && set.has(pathInRoot); // 返回存在性
 }
 exports.hasKey = hasKey;
+function getAllRoots() {
+    if (cache.mock)
+        return Object.keys(cache.mock);
+    if (!cache.map)
+        cache.map = buildDictMap();
+    return Object.keys(cache.map);
+}
+exports.getAllRoots = getAllRoots;
 function pickRoot(roots, pathInRoot) {
     if (!roots || !roots.length)
         return ''; // 无候选则返回空

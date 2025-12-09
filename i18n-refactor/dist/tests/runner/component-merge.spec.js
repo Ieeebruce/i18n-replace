@@ -1,6 +1,13 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const component_1 = require("../../src/runner/component");
+const dict_reader_1 = require("../../src/util/dict-reader");
+beforeAll(() => {
+    (0, dict_reader_1.setMockDict)({
+        'common': new Set(['common.title']),
+        'app': new Set(['app.desc'])
+    });
+});
 test('merge: dict alias from spreads common+app', () => {
     const ts = `class C { 
     dict: any;

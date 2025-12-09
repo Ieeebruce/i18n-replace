@@ -1,7 +1,7 @@
 {
   "serviceTypeName": "I18nLocaleService",
   "getLocalMethod": "getLocale",
-  "dictDir": "src/app/i18n",
+  "dictDir": "src2/app/i18n",
   "languages": ["zh", "en"],
   "jsonOutDir": "src2/i18n/default",
   "jsonArrayMode": "nested",

@@ -10,7 +10,7 @@ const var_alias_1 = require("../core/var-alias"); // 导入别名收集工具
 const params_extractor_1 = require("../core/params-extractor"); // 导入 replace 参数抽取器
 const ts_replace_1 = require("../replace/ts-replace"); // 导入 TS 调用渲染器
 const prune_1 = require("../replace/prune"); // 导入无用声明清理器
-const dict_reader_1 = require("../util/dict-reader"); // 导入字典根选择工具
+const dict_reader_1 = require("../util/dict-reader");
 const key_resolver_1 = require("../core/key-resolver");
 function collectGetLocaleVars(code) {
     const names = new Set(); // 结果集合
@@ -25,19 +25,28 @@ function collectGetLocaleVars(code) {
 }
 function buildAliases(code) {
     const sf = typescript_1.default.createSourceFile('x.ts', code, typescript_1.default.ScriptTarget.Latest, true, typescript_1.default.ScriptKind.TS); // 解析源码
-    const raw = (0, var_alias_1.collectVarAliases)(sf, config_1.config.fallbackServiceParamName, config_1.config.getLocalMethod); // 通过 AST 收集别名
+    // Detect service name from constructor
+    let serviceName = '';
+    const visitCtor = (node) => {
+        if (typescript_1.default.isConstructorDeclaration(node)) {
+            for (const p of node.parameters) {
+                if (p.type && typescript_1.default.isTypeReferenceNode(p.type) && typescript_1.default.isIdentifier(p.type.typeName) && p.type.typeName.text === config_1.config.serviceTypeName) {
+                    if (typescript_1.default.isIdentifier(p.name))
+                        serviceName = p.name.text;
+                }
+            }
+        }
+        typescript_1.default.forEachChild(node, visitCtor);
+    };
+    visitCtor(sf);
+    const raw = (0, var_alias_1.collectVarAliases)(sf, serviceName, config_1.config.getLocalMethod); // 通过 AST 收集别名
+    const regexVars = [];
     const out = []; // 输出列表
     for (const a of raw) { // 转换结果结构
         out.push({ name: a.name, prefix: a.prefix, roots: a.roots }); // 推入别名
     }
-    const rx = new RegExp(`\\b([A-Za-z_]\\w*)\\s*=\\s*this\\.${config_1.config.fallbackServiceParamName}\\.${config_1.config.getLocalMethod}\\s*\\(`, 'g'); // 直接赋值检测
-    let m; // 匹配变量
-    while ((m = rx.exec(code)))
-        out.push({ name: m[1], prefix: null }); // 加入无前缀别名
-    if (/\bi18n\s*:\s*/.test(code) || /this\.i18n\s*=/.test(code))
-        out.push({ name: 'i18n', prefix: null }); // 标记 i18n
-    if (/\bdict\s*:\s*/.test(code) || /this\.dict\s*=/.test(code))
-        out.push({ name: 'dict', prefix: null }); // 标记 dict
+    for (const name of regexVars)
+        out.push({ name, prefix: null });
     // 不再将所有 this.<name>. 视为别名，避免误替换普通对象/数组方法
     // 去重：同名保留带前缀者
     const map = new Map(); // 名称到别名映射
@@ -51,10 +60,6 @@ function buildAliases(code) {
 function filterLeafAliases(tsCode, aliases) {
     const sf = typescript_1.default.createSourceFile('x.ts', tsCode, typescript_1.default.ScriptTarget.Latest, true, typescript_1.default.ScriptKind.TS);
     const usedAsAlias = new Set();
-    // Always keep common roots
-    usedAsAlias.add('i18n');
-    usedAsAlias.add('dict');
-    usedAsAlias.add('locale');
     const visit = (node) => {
         if (typescript_1.default.isPropertyAccessExpression(node)) {
             if (node.expression.kind === typescript_1.default.SyntaxKind.ThisKeyword && typescript_1.default.isIdentifier(node.name)) {
@@ -69,12 +74,17 @@ function filterLeafAliases(tsCode, aliases) {
         typescript_1.default.forEachChild(node, visit);
     };
     visit(sf);
-    return aliases.filter(a => usedAsAlias.has(a.name));
+    const filtered = aliases.filter(a => usedAsAlias.has(a.name));
+    const present = new Set(filtered.map(a => a.name));
+    for (const name of Array.from(usedAsAlias)) {
+        if (!present.has(name))
+            filtered.push({ name, prefix: null });
+    }
+    return filtered;
 }
 function replaceTs(src) {
     let s = src;
     let aliases = buildAliases(src);
-    aliases = filterLeafAliases(src, aliases);
     const sfAst = typescript_1.default.createSourceFile('x.ts', s, typescript_1.default.ScriptTarget.Latest, true, typescript_1.default.ScriptKind.TS);
     const reps = [];
     const seen = new Set();
@@ -106,12 +116,52 @@ function replaceTs(src) {
                 const isAssignLHS = typescript_1.default.isBinaryExpression(p) && p.left === outer;
                 const isReplaceChain = typescript_1.default.isPropertyAccessExpression(p) && p.name.getText(sfAst) === 'replace';
                 if (!isCall && !isAssignLHS && !isReplaceChain) {
-                    const res = (0, key_resolver_1.resolveKeyFromAccess)(sfAst, outer, ai.prefix || null, ai.roots || []);
+                    const res = (0, key_resolver_1.resolveKeyFromAccess)(sfAst, outer, ai.prefix || null, (ai.roots && ai.roots.length) ? ai.roots : (0, dict_reader_1.getAllRoots)());
                     const text = (0, ts_replace_1.renderTsGet)(aliasName, res);
                     const key = `${outer.getStart(sfAst)}:${outer.getEnd()}`;
                     if (!seen.has(key)) {
                         reps.push({ s: outer.getStart(sfAst), e: outer.getEnd(), text });
                         seen.add(key);
+                    }
+                }
+            }
+        }
+        if (typescript_1.default.isCallExpression(node) && typescript_1.default.isPropertyAccessExpression(node.expression) && node.expression.name.getText(sfAst) === 'get') {
+            const base = node.expression.expression;
+            const aliasName = getAliasName(base);
+            if (aliasName && info.has(aliasName)) {
+                const ai = info.get(aliasName);
+                const arg0 = node.arguments[0];
+                if (arg0 && typescript_1.default.isStringLiteral(arg0)) {
+                    const roots = (ai.roots && ai.roots.length) ? ai.roots : (0, dict_reader_1.getAllRoots)();
+                    const r = (0, dict_reader_1.pickRoot)(roots, arg0.text);
+                    if (r) {
+                        const newKey = `${r}.${arg0.text}`;
+                        const text = `this.${aliasName === 'i18n' ? 'i18n' : 'i18n'}.get('${newKey}')`; // simplistic replacement, ignoring other args for now
+                        const key = `${node.getStart(sfAst)}:${node.getEnd()}`;
+                        // check if we need to preserve other arguments? 
+                        // get(key, params) -> get(newKey, params)
+                        // simplified: only replace if key changes
+                        if (newKey !== arg0.text) {
+                            // We need to preserve other arguments if any.
+                            // But renderTsGet usually reconstructs the call.
+                            // Here we are editing an existing call.
+                            // Easier to just replace the string literal content?
+                            // But reps uses text replacement.
+                            // Let's replace the whole call to be safe/consistent.
+                            // Wait, renderTsGet generates `this.i18n.get(...)`.
+                            // Does it support preserving other args? 
+                            // resolveKeyFromAccess returns params? No, it returns params from access chain.
+                            // Here we have existing args.
+                            // Alternative: Just replace the string literal.
+                            const keySpan = { s: arg0.getStart(sfAst), e: arg0.getEnd() };
+                            const keyText = `'${newKey}'`;
+                            const k = `${keySpan.s}:${keySpan.e}`;
+                            if (!seen.has(k)) {
+                                reps.push({ s: keySpan.s, e: keySpan.e, text: keyText });
+                                seen.add(k);
+                            }
+                        }
                     }
                 }
             }
@@ -127,7 +177,7 @@ function replaceTs(src) {
             const aliasName = getAliasName(base);
             if (aliasName && info.has(aliasName)) {
                 const ai = info.get(aliasName);
-                const res = (0, key_resolver_1.resolveKeyFromAccess)(sfAst, base, ai.prefix || null, ai.roots || []);
+                const res = (0, key_resolver_1.resolveKeyFromAccess)(sfAst, base, ai.prefix || null, (ai.roots && ai.roots.length) ? ai.roots : (0, dict_reader_1.getAllRoots)());
                 const params = {};
                 for (const c of calls) {
                     const [a0, a1] = c.arguments;
@@ -159,6 +209,49 @@ function replaceTs(src) {
         for (const r of reps)
             s = s.slice(0, r.s) + r.text + s.slice(r.e);
     }
+    // Fallback: plain property chains not followed by call/replace/[ or assignment
+    for (const a of aliases) {
+        const name = a.name;
+        const composeKey = (path) => {
+            if (a.prefix)
+                return `${a.prefix}.${path}`;
+            const roots = (a.roots && a.roots.length) ? a.roots : (0, dict_reader_1.getAllRoots)();
+            if (roots && roots.length) {
+                const r = (0, dict_reader_1.pickRoot)(roots, path);
+                return r ? `${r}.${path}` : path;
+            }
+            return path;
+        };
+        s = s.replace(new RegExp(`this\\.${name}\\.(?!get\\b)([A-Za-z0-9_.]+)(?!\\s*\\(|\\s*\\.replace|\\s*\\[|\\s*=)`, 'g'), (_m, path) => {
+            const keyExpr = composeKey(String(path));
+            return `this.${name === 'i18n' ? 'i18n' : 'i18n'}.get('${keyExpr}')`;
+        });
+    }
+    const sfCtor = typescript_1.default.createSourceFile('x.ts', s, typescript_1.default.ScriptTarget.Latest, true, typescript_1.default.ScriptKind.TS);
+    let serviceName = '';
+    const visitCtor2 = (node) => {
+        if (typescript_1.default.isConstructorDeclaration(node)) {
+            for (const p of node.parameters) {
+                if (p.type && typescript_1.default.isTypeReferenceNode(p.type) && typescript_1.default.isIdentifier(p.type.typeName) && p.type.typeName.text === config_1.config.serviceTypeName) {
+                    if (typescript_1.default.isIdentifier(p.name))
+                        serviceName = p.name.text;
+                }
+            }
+        }
+        typescript_1.default.forEachChild(node, visitCtor2);
+    };
+    visitCtor2(sfCtor);
+    if (serviceName) {
+        s = s.replace(new RegExp(`this\\.([A-Za-z_]\\w*)\\s*=\\s*this\\.${serviceName}\\.(?:getLocale|getLocal)\\([^)]*\\)\\.([A-Za-z0-9_.]+)`, 'g'), (_m, v, path) => {
+            const segs = String(path).split('.');
+            const root = segs.shift() || '';
+            const rest = segs.join('.');
+            if (root && rest && (0, dict_reader_1.hasKey)(root, rest)) {
+                return `this.${String(v)} = this.i18n.get('${root}.${rest}')`;
+            }
+            return _m;
+        });
+    }
     return s;
 }
 function replaceHtml(src, aliases) {
@@ -167,11 +260,14 @@ function replaceHtml(src, aliases) {
     for (const a of aliases)
         info.set(a.name, a); // 填充映射
     const getPrefix = (ai, key) => {
-        if (ai.roots && ai.roots.length) {
-            const rp = (0, dict_reader_1.pickRoot)(ai.roots, key);
+        if (ai.prefix)
+            return ai.prefix + '.';
+        const roots = (ai.roots && ai.roots.length) ? ai.roots : (0, dict_reader_1.getAllRoots)();
+        if (roots && roots.length) {
+            const rp = (0, dict_reader_1.pickRoot)(roots, key);
             return rp ? rp + '.' : '';
         }
-        return ai.prefix ? ai.prefix + '.' : '';
+        return '';
     };
     s = s.replace(/\{\{\s*([A-Za-z_]\w*)\.([A-Za-z0-9_.]+)((?:\.replace\([^)]*\))+)[^}]*\}\}/g, (_m, v, key, chain) => {
         const ai = info.get(String(v)); // 获取别名信息
@@ -254,21 +350,18 @@ function processComponent(tsCode, htmlCode, filePath) {
     const varNames = rawAliases.map(a => a.name); // 收集所有别名变量名（包括未使用的，以便清理定义）
     let tsOut = replaceTs(tsCode); // 统一 TS 访问形态（在清理前以保留别名根信息）
     tsOut = (0, prune_1.pruneUnused)({}, tsOut, varNames); // 清理无用赋值/声明
-    tsOut = tsOut.replace(/this\.[A-Za-z_]\w*\s*=\s*[^;]*\.(?:getLocal|getLocale)\([^)]*\)(?:\.[A-Za-z0-9_.]+)?\s*;?/g, ''); // 移除残留赋值
     // 统一别名 get 调用到 this.i18n.get(...)
     for (const ai of aliasInfos) { // 遍历别名
         if (ai.name !== 'i18n') { // 非 i18n 别名统一指向 this.i18n
-            tsOut = tsOut.replace(new RegExp(`this\\.${ai.name}\\\.get(?!Locale)\\s*\\(`, 'g'), 'this.i18n.get('); // 调用替换
-            tsOut = tsOut.replace(new RegExp(`\\b${ai.name}\\s*:\\s*any\\s*;`, 'g'), ''); // 移除残留声明
+            tsOut = tsOut.replace(new RegExp(`this\\.${ai.name}\\.get(?!Locale)\\s*\\(`, 'g'), 'this.i18n.get('); // 调用替换
         }
     }
     // 规范化构造函数注入 I18nService
     tsOut = tsOut.replace(/constructor\s*\(([^)]*)\)/, (m, params) => {
         let p = params; // 参数文本
         const svc = config_1.config.serviceTypeName;
-        const prm = config_1.config.fallbackServiceParamName || 'locale';
-        // 确保只替换参数名，避免误伤同名属性/方法
-        p = p.replace(new RegExp(`\\b(private|public|protected)?\\s*${prm}\\s*:\\s*${svc}\\b`, 'g'), `public i18n: ${svc}`); // 替换旧依赖
+        // 将任意名称、且类型为服务类型的参数统一改名为 i18n
+        p = p.replace(new RegExp(`\\b(private|public|protected)?\\s*[A-Za-z_]\\w*\\s*:\\s*${svc}\\b`, 'g'), `public i18n: ${svc}`);
         return `constructor(${p})`; // 返回构造函数头
     });
     tsOut = injectI18nPipe(tsOut, filePath); // 注入 I18nPipe

@@ -263,5 +263,7 @@ function main() {
     }
 }
 if (require.main === module) {
-    main(); // 执行主程序
+}
+if (require.main === module) {
+    main();
 }

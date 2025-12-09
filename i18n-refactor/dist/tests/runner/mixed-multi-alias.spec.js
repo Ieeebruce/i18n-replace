@@ -1,6 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const component_1 = require("../../src/runner/component");
+const dict_reader_1 = require("../../src/util/dict-reader");
+beforeAll(() => {
+    (0, dict_reader_1.setMockDict)({
+        'common': new Set(['common.desc', 'onlyCommon', 'common.title']),
+        'app': new Set(['title', 'footer', 'header', 'description', 'onlyApp', 'user.greetTpl', 'app.desc']),
+        'home': new Set(['welcome']),
+    });
+});
 // 测试用例：在同一个组件中使用多个别名，但 dict 的合并顺序不同（app在前，common在后）
 test('multiple aliases i18n/dict/L in one component', () => {
     // 定义模拟的 TypeScript 代码，dict 别名先合并 app，再合并 common
