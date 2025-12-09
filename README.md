@@ -64,7 +64,6 @@ To get more help on the Angular CLI use `ng help` or go check out the [Angular C
 {
   "serviceTypeName": "I18nLocaleService",
   "getLocalMethod": "getLocale",
-  "fallbackServiceParamName": "locale",
   "tsGetHelperName": "i18nGet",
   "dictDir": "src/app/i18n",
   "languages": ["zh", "en"],
@@ -78,7 +77,7 @@ To get more help on the Angular CLI use `ng help` or go check out the [Angular C
 }
 ```
 - 字段说明：
-  - 基本：`serviceTypeName`、`getLocalMethod`、`fallbackServiceParamName`、`tsGetHelperName`。
+  - 基本：`serviceTypeName`、`getLocalMethod`、`tsGetHelperName`。
   - 路径与导出：
    - `dictDir`: TS 字典源目录。
    - `languages`: 要处理的语言列表。
@@ -102,7 +101,7 @@ To get more help on the Angular CLI use `ng help` or go check out the [Angular C
 
 ### 工作原理（简述）
 - TS：
-  - 识别 `this.<alias> = this.locale.getLocale()` 与已存在的 `this.i18n`/`this.dict` 别名。
+  - 识别 `this.<alias> = this.<serviceParam>.getLocale()` 与已存在的 `this.i18n`/`this.dict` 别名；`<serviceParam>` 为构造函数中类型为 `I18nLocaleService` 的任意参数名（自动探测）。
   - 将 `this.<alias>.<path>`、索引访问与链式 `.replace('{k}', expr)` 统一替换为 `this.i18n.get('key', params)`。
   - 在静态键替换时校验键是否存在于字典，缺失会记录告警，不阻断流程。
   - 清理与规范：统一构造函数注入 `public i18n: I18nLocaleService`，归一化 `get` 调用。

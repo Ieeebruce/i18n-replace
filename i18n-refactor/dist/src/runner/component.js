@@ -266,9 +266,9 @@ function processComponent(tsCode, htmlCode, filePath) {
     tsOut = tsOut.replace(/constructor\s*\(([^)]*)\)/, (m, params) => {
         let p = params; // 参数文本
         const svc = config_1.config.serviceTypeName;
-        const prm = config_1.config.fallbackServiceParamName;
+        const prm = config_1.config.fallbackServiceParamName || 'locale';
         // 确保只替换参数名，避免误伤同名属性/方法
-        p = p.replace(new RegExp(`\\b(private|public)?\\s*${prm}\\s*:\\s*${svc}\\b(?!\\s*[,)])`), `public i18n: ${svc}`); // 替换旧依赖
+        p = p.replace(new RegExp(`\\b(private|public|protected)?\\s*${prm}\\s*:\\s*${svc}\\b`, 'g'), `public i18n: ${svc}`); // 替换旧依赖
         return `constructor(${p})`; // 返回构造函数头
     });
     tsOut = injectI18nPipe(tsOut, filePath); // 注入 I18nPipe

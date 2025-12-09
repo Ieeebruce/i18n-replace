@@ -5,6 +5,7 @@
     "strict": true,
     "esModuleInterop": true,
     "moduleResolution": "node",
+    "skipLibCheck": true,
     "types": ["jest", "node"],
     "typeRoots": ["../node_modules/@types"],
     "baseUrl": "./src",

@@ -46,7 +46,13 @@ export function collectVarAliases(sf: ts.SourceFile, serviceParamName: string, g
         }
       } else if (ts.isCallExpression(node.initializer) && isGetLocalCall(sf, node.initializer, serviceParamName, getLocalMethod)) {
         if (node.name && ts.isIdentifier(node.name)) {
-          addAlias(node.name.getText(sf))
+          const a = addAlias(node.name.getText(sf))
+          if (node.initializer.arguments.length > 0) {
+             const arg = node.initializer.arguments[0]
+             if (ts.isStringLiteral(arg)) {
+               a.prefix = arg.text
+             }
+          }
         }
       }
     }
@@ -105,7 +111,13 @@ export function collectVarAliases(sf: ts.SourceFile, serviceParamName: string, g
                   }
                 }
               } else if (ts.isCallExpression(be.right) && isGetLocalCall(sf, be.right, serviceParamName, getLocalMethod)) {
-                addAlias(nm)
+                const a = addAlias(nm)
+                if (be.right.arguments.length > 0) {
+                   const arg = be.right.arguments[0]
+                   if (ts.isStringLiteral(arg)) {
+                     a.prefix = arg.text
+                   }
+                }
               }
               if (ts.isObjectLiteralExpression(be.right)) { // 右侧为对象字面量（合并）
                 const spreads = be.right.properties.filter(p => ts.isSpreadAssignment(p)) as ts.SpreadAssignment[] // 展开项

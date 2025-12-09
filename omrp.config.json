@@ -1,10 +1,9 @@
 {
   "serviceTypeName": "I18nLocaleService",
   "getLocalMethod": "getLocale",
-  "fallbackServiceParamName": "",
   "dictDir": "src/app/i18n",
   "languages": ["zh", "en"],
-  "jsonOutDir": "sr2/i18n/default",
+  "jsonOutDir": "src2/i18n/default",
   "jsonArrayMode": "nested",
   "ensureAngular": "fix",
   "dir": "src2",

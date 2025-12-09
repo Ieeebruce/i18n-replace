@@ -211,5 +211,8 @@ function main() { // CLI 主入口（仅允许 --mode，其余参数从 omrp.con
 }
 
 if (require.main === module) {
-  main() // 执行主程序
+}
+
+if (require.main === module) {
+  main()
 }

@@ -98,12 +98,26 @@ function buildDictMap(): DictMap { // 构建根到键集合的映射
   return map // 返回结果
 }
 
-const cache: { map: DictMap | null } = { map: null } // 简单缓存，避免重复解析字典
+const cache: { map: DictMap | null, mock: DictMap | null } = { map: null, mock: null } // 简单缓存，避免重复解析字典
+
+export function setMockDict(map: DictMap | null) {
+  cache.mock = map
+}
 
 export function hasKey(root: string, pathInRoot: string): boolean { // 判断某根下是否存在给定路径
+  if (cache.mock) {
+    const set = cache.mock[root]
+    return !!set && set.has(pathInRoot)
+  }
   if (!cache.map) cache.map = buildDictMap() // 延迟构建映射
   const set = cache.map[root] // 取根集合
   return !!set && set.has(pathInRoot) // 返回存在性
+}
+
+export function getAllRoots(): string[] {
+  if (cache.mock) return Object.keys(cache.mock)
+  if (!cache.map) cache.map = buildDictMap()
+  return Object.keys(cache.map)
 }
 
 export function pickRoot(roots: string[] | undefined, pathInRoot: string): string { // 在候选根中为给定路径选择最佳根

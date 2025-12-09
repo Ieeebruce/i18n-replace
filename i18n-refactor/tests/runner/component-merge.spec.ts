@@ -1,4 +1,12 @@
 import { processComponent } from '../../src/runner/component'
+import { setMockDict } from '../../src/util/dict-reader'
+
+beforeAll(() => {
+  setMockDict({
+    'common': new Set(['common.title']),
+    'app': new Set(['app.desc'])
+  })
+})
 
 test('merge: dict alias from spreads common+app', () => {
   const ts = `class C { 

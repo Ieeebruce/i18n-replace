@@ -29,7 +29,7 @@ const path = __importStar(require("path"));
 const defaults = {
     serviceTypeName: 'I18nLocaleService', // 服务类型名
     getLocalMethod: 'getLocale', // 词条根对象方法（与现有代码保持一致）
-    fallbackServiceParamName: '', // 服务参数名回退值
+    fallbackServiceParamName: 'locale', // 服务参数名回退值
     dictDir: 'src/app/i18n',
     languages: ['zh', 'en'],
     jsonOutDir: 'i18n-refactor/out',

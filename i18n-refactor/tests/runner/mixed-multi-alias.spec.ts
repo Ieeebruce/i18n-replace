@@ -1,4 +1,13 @@
 import { processComponent } from '../../src/runner/component';
+import { setMockDict } from '../../src/util/dict-reader';
+
+beforeAll(() => {
+  setMockDict({
+    'common': new Set(['common.desc', 'onlyCommon', 'common.title']),
+    'app': new Set(['title', 'footer', 'header', 'description', 'onlyApp', 'user.greetTpl', 'app.desc']),
+    'home': new Set(['welcome']),
+  });
+});
 
 // 测试用例：在同一个组件中使用多个别名，但 dict 的合并顺序不同（app在前，common在后）
 test('multiple aliases i18n/dict/L in one component', () => {

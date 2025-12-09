@@ -4,7 +4,6 @@ import * as path from 'path'
 export type Config = { // 配置对象类型，定义脚本解析与渲染所需的标识符
   serviceTypeName: string
   getLocalMethod: string
-  fallbackServiceParamName: string
   dictDir?: string
   languages?: string[]
   jsonOutDir?: string
@@ -19,7 +18,6 @@ export type Config = { // 配置对象类型，定义脚本解析与渲染所需
 const defaults: Config = { // 默认配置常量，供各模块使用
   serviceTypeName: 'I18nLocaleService', // 服务类型名
   getLocalMethod: 'getLocale', // 词条根对象方法（与现有代码保持一致）
-  fallbackServiceParamName: '', // 服务参数名回退值
   dictDir: 'src/app/i18n',
   languages: ['zh','en'],
   jsonOutDir: 'i18n-refactor/out',
