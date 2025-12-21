@@ -134,11 +134,6 @@ function filterLeafAliases(tsCode, aliases) {
     };
     visit(sf);
     const filtered = aliases.filter(a => usedAsAlias.has(a.name));
-    const present = new Set(filtered.map(a => a.name));
-    for (const name of Array.from(usedAsAlias)) {
-        if (!present.has(name))
-            filtered.push({ name, prefix: null });
-    }
     return filtered;
 }
 function replaceTs(src, externalAliases) {
@@ -555,7 +550,7 @@ function processComponent(tsCode, htmlCode, filePath, externalAliases) {
     let tsOut = replaceTs(tsCode, externalAliases); // 统一 TS 访问形态
     // 统一别名 get 调用到 this.i18n.get(...)
     for (const ai of aliasInfos) { // 遍历别名
-        const target = serviceName || config_1.config.serviceVariableName;
+        const target = config_1.config.serviceVariableName || 'i18n';
         if (ai.name !== target) { // 非 service 别名统一指向 service
             tsOut = tsOut.replace(new RegExp(`this\\.${ai.name}\\.get(?!Locale)\\s*\\(`, 'g'), `this.${target}.get(`); // 调用替换
         }
