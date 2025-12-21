@@ -244,6 +244,20 @@ function pickKeyCandidate(union, raw) {
     cands.sort((a, b) => a.length - b.length);
     return cands[0] || null;
 }
+function loadLangDict(dictDir, langPrefix, arrayMode) {
+    const dir = path.join(process.cwd(), dictDir);
+    if (!fs.existsSync(dir))
+        return {};
+    const re = new RegExp(`^${langPrefix}[A-Za-z0-9_-]*\\.ts$`);
+    const files = fs.readdirSync(dir).filter(n => re.test(n));
+    let out = {};
+    for (const name of files) {
+        const fp = path.join(dir, name);
+        const flat = (0, dict_flatten_1.flattenLangFile)(fp, arrayMode);
+        out = { ...out, ...flat };
+    }
+    return out;
+}
 function extractKeys(line, type) {
     const s = String(line || '');
     if (type === 'ts') {
@@ -364,8 +378,8 @@ function main() {
     const langs = (config_1.config.languages || ['zh', 'en']);
     const dictDir = config_1.config.dictDir || 'src/app/i18n';
     const arrayMode = (config_1.config.jsonArrayMode || 'nested');
-    const zhMap = fs.existsSync(path.join(process.cwd(), dictDir, 'zh.ts')) ? (0, dict_flatten_1.flattenLangFile)(path.join(process.cwd(), dictDir, 'zh.ts'), arrayMode) : {};
-    const enMap = fs.existsSync(path.join(process.cwd(), dictDir, 'en.ts')) ? (0, dict_flatten_1.flattenLangFile)(path.join(process.cwd(), dictDir, 'en.ts'), arrayMode) : {};
+    const zhMap = loadLangDict(dictDir, 'zh', arrayMode);
+    const enMap = loadLangDict(dictDir, 'en', arrayMode);
     const unionKeys = Array.from(new Set([...Object.keys(zhMap), ...Object.keys(enMap)]));
     const details = [];
     for (const f of tsFiles) { // 遍历 TS
