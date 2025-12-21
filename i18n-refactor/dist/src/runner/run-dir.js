@@ -28,13 +28,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.writeHtmlReportForTest = exports.main = exports.emitJson = exports.ensureAngularFiles = exports.processTsFile = void 0;
-const fs = __importStar(require("fs")); // 文件系统，用于读写
-const path = __importStar(require("path")); // 路径工具，用于定位
-const typescript_1 = __importDefault(require("typescript")); // TypeScript AST 解析
-const config_1 = require("../core/config"); // 统一配置（固定从 omrp.config.json 加载）
-const logger_1 = require("../util/logger"); // 日志
-const dict_reader_1 = require("../util/dict-reader"); // 设置字典目录（用于 pickRoot/hasKey 等工具）
-const component_1 = require("./component"); // 复用 UT 使用的组件处理逻辑
+const fs = __importStar(require("fs"));
+const path = __importStar(require("path"));
+const typescript_1 = __importDefault(require("typescript"));
+const config_1 = require("../core/config");
+const logger_1 = require("../util/logger");
+const dict_reader_1 = require("../util/dict-reader");
+const component_1 = require("./component");
 const dict_flatten_1 = require("../util/dict-flatten");
 const prune_1 = require("../replace/prune");
 const var_alias_1 = require("../core/var-alias");
@@ -282,11 +282,13 @@ function valueOf(map, key) {
 }
 function main() {
     const args = process.argv.slice(2); // 读取参数
-    let mode = 'replace'; // 默认模式
-    const usage = `Usage: i18n-refactor [--mode=replace|restore|bootstrap|delete] [--help] [--version]`;
+    let mode = 'replace';
+    const usage = `Usage: i18n-refactor [init | --mode=replace|restore|bootstrap|delete|init] [--help] [--version]`;
     const version = '0.2.0';
     for (const a of args) { // 解析参数
-        const r = a.match(/^--mode=(replace|restore|bootstrap|delete)$/);
+        if (a === 'init')
+            mode = 'init';
+        const r = a.match(/^--mode=(replace|restore|bootstrap|delete|init)$/);
         if (r)
             mode = r[1];
         if (a === '--dry-run')
@@ -304,6 +306,13 @@ function main() {
     (0, logger_1.configureLogger)({ level: config_1.config.logLevel, format: (config_1.config.format === 'json' || config_1.config.format === 'pretty' ? config_1.config.format : 'pretty') });
     (0, dict_reader_1.setDictDir)(config_1.config.dictDir || 'src/app/i18n');
     (0, logger_1.info)('start', { dir: config_1.config.dir, mode, dryRun });
+    if (mode === 'init') {
+        const merged = (0, config_1.loadConfig)();
+        const fp = path.join(process.cwd(), 'omrp.config.json');
+        fs.writeFileSync(fp, JSON.stringify(merged, null, 2) + '\n', 'utf8');
+        (0, logger_1.info)('config initialized', { file: fp });
+        return;
+    }
     if (mode === 'bootstrap') {
         ensureAngularFiles(config_1.config.dictDir || 'src/app/i18n', (config_1.config.ensureAngular || 'fix'));
         emitJson(config_1.config.dictDir || 'src/app/i18n', (config_1.config.jsonOutDir || 'i18n-refactor/out'), (config_1.config.languages || ['zh', 'en']), (config_1.config.jsonArrayMode || 'nested'));

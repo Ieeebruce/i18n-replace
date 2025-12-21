@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-import * as fs from 'fs' // 文件系统，用于读写
-import * as path from 'path' // 路径工具，用于定位
-import ts from 'typescript' // TypeScript AST 解析
-import { config } from '../core/config' // 统一配置（固定从 omrp.config.json 加载）
-import { configureLogger, info, warn } from '../util/logger' // 日志
-import { setDictDir } from '../util/dict-reader' // 设置字典目录（用于 pickRoot/hasKey 等工具）
-import { processComponent } from './component' // 复用 UT 使用的组件处理逻辑
+import * as fs from 'fs'
+import * as path from 'path'
+import ts from 'typescript'
+import { config, loadConfig } from '../core/config'
+import { configureLogger, info, warn } from '../util/logger'
+import { setDictDir } from '../util/dict-reader'
+import { processComponent } from './component'
 import { flattenLangFile, writeJson } from '../util/dict-flatten'
 import { pruneUnused } from '../replace/prune'
 import { collectVarAliases, ExternalAliasMap, VarAlias } from '../core/var-alias'
@@ -228,13 +228,14 @@ function valueOf(map: Record<string, any>, key: string | null): string | null {
   return Array.isArray(v) ? JSON.stringify(v) : String(v)
 }
 
-export function main() { // CLI 主入口（仅允许 --mode，其余参数从 omrp.config.json 读取）
+export function main() {
   const args = process.argv.slice(2) // 读取参数
-  let mode: 'replace' | 'restore' | 'bootstrap' | 'delete' = 'replace' // 默认模式
-  const usage = `Usage: i18n-refactor [--mode=replace|restore|bootstrap|delete] [--help] [--version]`
+  let mode: 'replace' | 'restore' | 'bootstrap' | 'delete' | 'init' = 'replace'
+  const usage = `Usage: i18n-refactor [init | --mode=replace|restore|bootstrap|delete|init] [--help] [--version]`
   const version = '0.2.0'
   for (const a of args) { // 解析参数
-    const r = a.match(/^--mode=(replace|restore|bootstrap|delete)$/)
+    if (a === 'init') mode = 'init'
+    const r = a.match(/^--mode=(replace|restore|bootstrap|delete|init)$/)
     if (r) mode = r[1] as any
     if (a === '--dry-run') dryRun = true
     if (a === '--help') { process.stdout.write(usage + '\n'); return }
@@ -244,6 +245,13 @@ export function main() { // CLI 主入口（仅允许 --mode，其余参数从 o
   configureLogger({ level: config.logLevel, format: (config.format === 'json' || config.format === 'pretty' ? config.format : 'pretty') })
   setDictDir(config.dictDir || 'src/app/i18n')
   info('start', { dir: config.dir, mode, dryRun })
+  if (mode === 'init') {
+    const merged = loadConfig()
+    const fp = path.join(process.cwd(), 'omrp.config.json')
+    fs.writeFileSync(fp, JSON.stringify(merged, null, 2) + '\n', 'utf8')
+    info('config initialized', { file: fp })
+    return
+  }
   if (mode === 'bootstrap') {
     ensureAngularFiles(config.dictDir || 'src/app/i18n', (config.ensureAngular || 'fix'))
     emitJson(config.dictDir || 'src/app/i18n', (config.jsonOutDir || 'i18n-refactor/out'), (config.languages || ['zh','en']), (config.jsonArrayMode || 'nested'))

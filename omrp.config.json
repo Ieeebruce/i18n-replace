@@ -1,11 +1,14 @@
 {
   "serviceTypeName": "I18nLocaleService",
+  "serviceVariableName": "i18n",
   "getLocalMethod": "getLocale",
   "dictDir": "src2/app/i18n",
-  "languages": ["zh", "en"],
+  "languages": [
+    "zh",
+    "en"
+  ],
   "jsonOutDir": "report",
   "jsonArrayMode": "nested",
-  "serviceVariableName": "i18n",
   "ensureAngular": "fix",
   "dir": "src2",
   "dryRun": true,
