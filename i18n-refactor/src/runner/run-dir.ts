@@ -430,13 +430,13 @@ export function main() {
   if ((config.format || 'json') === 'json') process.stdout.write(JSON.stringify({ summary, results, details }, null, 2) + '\n')
   else {
     info('summary', summary)
-    for (const r of results) info('result', r)
+    for (const r of results.filter(x => x.changed)) info('result', r)
   }
 
   // Always generate HTML report
   const outDir = path.isAbsolute((config.jsonOutDir || 'i18n-refactor/out')) ? (config.jsonOutDir as string) : path.join(process.cwd(), (config.jsonOutDir || 'i18n-refactor/out'))
   fs.mkdirSync(outDir, { recursive: true })
-  const html = renderHtmlReport(summary, results, details)
+  const html = renderHtmlReport(summary, results.filter(r => r.changed), details)
   const fp = path.join(outDir, 'report.html')
   fs.writeFileSync(fp, html, 'utf8')
   info('html report written', { file: fp })

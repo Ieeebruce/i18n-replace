@@ -499,13 +499,13 @@ function main() {
         process.stdout.write(JSON.stringify({ summary, results, details }, null, 2) + '\n');
     else {
         (0, logger_1.info)('summary', summary);
-        for (const r of results)
+        for (const r of results.filter(x => x.changed))
             (0, logger_1.info)('result', r);
     }
     // Always generate HTML report
     const outDir = path.isAbsolute((config_1.config.jsonOutDir || 'i18n-refactor/out')) ? config_1.config.jsonOutDir : path.join(process.cwd(), (config_1.config.jsonOutDir || 'i18n-refactor/out'));
     fs.mkdirSync(outDir, { recursive: true });
-    const html = renderHtmlReport(summary, results, details);
+    const html = renderHtmlReport(summary, results.filter(r => r.changed), details);
     const fp = path.join(outDir, 'report.html');
     fs.writeFileSync(fp, html, 'utf8');
     (0, logger_1.info)('html report written', { file: fp });
