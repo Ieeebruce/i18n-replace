@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2019",
+    "module": "CommonJS",
+    "strict": true,
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+    "skipLibCheck": true,
+    "types": ["jest", "node"],
+    "typeRoots": ["../node_modules/@types"],
+    "baseUrl": "./src",
+    "outDir": "./dist"
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
+}

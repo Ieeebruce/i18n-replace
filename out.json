@@ -1,0 +1,91 @@
+{
+  "summary": {
+    "dir": "src2",
+    "files": 16,
+    "changed": 0,
+    "missingKeys": 0
+  },
+  "results": [
+    {
+      "file": "src2/app/app.component.spec.ts",
+      "type": "ts",
+      "changed": false
+    },
+    {
+      "file": "src2/app/app.component.ts",
+      "type": "ts",
+      "changed": false
+    },
+    {
+      "file": "src2/app/app.config.ts",
+      "type": "ts",
+      "changed": false
+    },
+    {
+      "file": "src2/app/app.routes.ts",
+      "type": "ts",
+      "changed": false
+    },
+    {
+      "file": "src2/app/examples/alias-getter/alias-getter.component.ts",
+      "type": "ts",
+      "changed": false
+    },
+    {
+      "file": "src2/app/examples/external/consumer.component.ts",
+      "type": "ts",
+      "changed": false
+    },
+    {
+      "file": "src2/app/examples/external/external.service.ts",
+      "type": "ts",
+      "changed": false
+    },
+    {
+      "file": "src2/app/examples/merge-assign/merge-assign.component.ts",
+      "type": "ts",
+      "changed": false
+    },
+    {
+      "file": "src2/app/examples/service-di/service-di.component.ts",
+      "type": "ts",
+      "changed": false
+    },
+    {
+      "file": "src2/app/examples/todolist/todolist.component.ts",
+      "type": "ts",
+      "changed": false
+    },
+    {
+      "file": "src2/app/i18n/en.ts",
+      "type": "ts",
+      "changed": false
+    },
+    {
+      "file": "src2/app/i18n/i18n.pipe.ts",
+      "type": "ts",
+      "changed": false
+    },
+    {
+      "file": "src2/app/i18n/index.ts",
+      "type": "ts",
+      "changed": false
+    },
+    {
+      "file": "src2/app/i18n/zh.ts",
+      "type": "ts",
+      "changed": false
+    },
+    {
+      "file": "src2/app/layout/layout.component.ts",
+      "type": "ts",
+      "changed": false
+    },
+    {
+      "file": "src2/main.ts",
+      "type": "ts",
+      "changed": false
+    }
+  ],
+  "details": []
+}

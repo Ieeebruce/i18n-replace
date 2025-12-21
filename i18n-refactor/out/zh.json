@@ -1,0 +1,32 @@
+{
+  "app.title": "Angular 国际化（TS对象）示例",
+  "app.description": "词条采用 TypeScript 定义，使用处为对象引用。",
+  "app.switchToEn": "切换到英文",
+  "app.switchToZh": "切换到中文",
+  "app.footer": "页脚",
+  "app.header": "应用头部覆盖",
+  "app.onlyApp": "仅应用",
+  "app.common.desc": "应用覆盖的通用描述",
+  "app.shared.label": "应用标签覆盖",
+  "app.settings.theme": "应用主题",
+  "app.user.greetTpl": "应用你好，{name}!",
+  "app.app.desc": "应用描述",
+  "common.common.title": "通用标题",
+  "common.common.desc": "通用描述",
+  "common.header": "通用头部",
+  "common.footer": "通用页脚",
+  "common.onlyCommon": "仅通用",
+  "common.shared.label": "通用标签",
+  "common.settings.theme": "默认主题",
+  "common.user.greetTpl": "你好，{name}!",
+  "home.welcome": "欢迎！",
+  "home.title": "首页",
+  "list.items": [
+    "项目一",
+    "项目二",
+    "项目三"
+  ],
+  "templates.info": "你好，{name}。你有 {count} 条通知。",
+  "templates.itemTpl": "索引 {index}：{value}",
+  "user.greetTpl": "你好，{name}!"
+}

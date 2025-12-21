@@ -1,0 +1,46 @@
+{
+  "name": "i18n-demo",
+  "version": "0.0.0",
+  "bin": {
+    "i18n-refactor": "./bin/i18n-refactor.js"
+  },
+  "scripts": {
+    "start": "ng serve",
+    "start:src2": "ng run i18n-demo:serve-src2",
+    "refactor:test": "node node_modules/jest/bin/jest.js --colors",
+    "i18n-refactor:build": "node node_modules/typescript/bin/tsc -p i18n-refactor/tsconfig.json",
+    "i18n-refactor:run": "npm run i18n-refactor:build && node i18n-refactor/dist/src/runner/run-dir.js --dir=src",
+    "i18n-refactor": "npm run i18n-refactor:build && node ./bin/i18n-refactor.js"
+  },
+  "private": true,
+  "dependencies": {
+    "@angular/animations": "^17.3.0",
+    "@angular/common": "^17.3.0",
+    "@angular/compiler": "^17.3.0",
+    "@angular/core": "^17.3.0",
+    "@angular/forms": "^17.3.0",
+    "@angular/localize": "^17.3.12",
+    "@angular/platform-browser": "^17.3.0",
+    "@angular/platform-browser-dynamic": "^17.3.0",
+    "@angular/router": "^17.3.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0",
+    "zone.js": "~0.14.3"
+  },
+  "devDependencies": {
+    "@angular-devkit/build-angular": "^17.3.8",
+    "@angular/cli": "^17.3.8",
+    "@angular/compiler-cli": "^17.3.0",
+    "@types/jasmine": "~5.1.0",
+    "@types/jest": "^30.0.0",
+    "jasmine-core": "~5.1.0",
+    "jest": "^29.7.0",
+    "karma": "~6.4.0",
+    "karma-chrome-launcher": "~3.2.0",
+    "karma-coverage": "~2.2.0",
+    "karma-jasmine": "~5.1.0",
+    "karma-jasmine-html-reporter": "~2.1.0",
+    "ts-jest": "^29.4.6",
+    "typescript": "~5.4.2"
+  }
+}

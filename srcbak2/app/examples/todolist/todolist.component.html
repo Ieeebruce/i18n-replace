@@ -1,0 +1,29 @@
+<section class="todo">
+  <h2 class="title">{{title}}</h2>
+  <div class="new">
+    <input type="text" [(ngModel)]="input" (keydown.enter)="add()" placeholder="What needs to be done?" />
+    <button (click)="add()">Add</button>
+  </div>
+
+  <div class="filters">
+    <button [class.active]="filter==='all'" (click)="setFilter('all')">All</button>
+    <button [class.active]="filter==='active'" (click)="setFilter('active')">Active</button>
+    <button [class.active]="filter==='completed'" (click)="setFilter('completed')">Completed</button>
+  </div>
+
+  <ul class="list">
+    <li *ngFor="let it of visible()" [class.done]="it.done">
+      <label>
+        <input type="checkbox" [checked]="it.done" (change)="toggle(it.id)" />
+        <span>{{ it.text }}</span>
+      </label>
+      <button class="remove" (click)="remove(it.id)">✕</button>
+    </li>
+  </ul>
+
+  <div class="footer" *ngIf="items.length">
+    <span>{{ leftCount() }} items left</span>
+    <button class="clear" (click)="clearCompleted()">Clear completed</button>
+  </div>
+</section>
+

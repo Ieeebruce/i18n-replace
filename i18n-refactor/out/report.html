@@ -1,0 +1,34 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>I18n Refactor Report</title><style>
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:24px;background:#fafafa;color:#222}
+.summary{display:flex;gap:16px;margin-bottom:20px}
+.card{background:#fff;border:1px solid #eee;border-radius:8px;padding:12px 16px;box-shadow:0 1px 2px rgba(0,0,0,0.04)}
+.card h3{margin:0 0 6px;font-size:14px;color:#555}
+.card .num{font-size:20px;font-weight:600}
+.files{margin:16px 0}
+.file{margin:16px 0;padding:12px;border:1px solid #eee;background:#fff;border-radius:8px}
+.file h4{margin:0 0 10px;font-size:14px;color:#333}
+table{width:100%;border-collapse:collapse}
+th,td{border:1px solid #eee;padding:8px;text-align:left;vertical-align:top;font-size:13px}
+th{background:#f6f6f6}
+.changed{color:#0a7; font-weight:600}
+.unchanged{color:#999}
+.mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace}
+.key{background:#f0f7ff;border-radius:4px;padding:2px 6px}
+.section-title{margin-top:28px;margin-bottom:8px;font-size:15px}
+</style></head><body><div class="summary">
+    <div class="card"><h3>Directory</h3><div class="num mono">/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo</div></div>
+    <div class="card"><h3>Total Files</h3><div class="num">2</div></div>
+    <div class="card"><h3>Changed Files</h3><div class="num">1</div></div>
+    <div class="card"><h3>Missing Keys</h3><div class="num">0</div></div>
+  </div><div class="files"><div class="section-title">Files</div><table><thead><tr><th>File</th><th>Type</th><th>Status</th></tr></thead><tbody><tr><td class="mono">/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/src/app/a.ts</td><td>ts</td><td><span class="changed">changed</span></td></tr><tr><td class="mono">/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/src/app/a.html</td><td>html</td><td><span class="unchanged">unchanged</span></td></tr></tbody></table></div><div class="section-title">Changes</div><div class="file"><h4>/Users/ieeebruce/Documents/trae_projects/i18n/i18n-demo/src/app/a.ts <span style="color:#999">(ts)</span></h4>
+      <table>
+        <thead><tr><th>Line</th><th>Before</th><th>After</th><th>Original Key & Value</th><th>Replaced Key & Value</th></tr></thead>
+        <tbody><tr>
+      <td>10</td>
+      <td class="mono">this.alias.title</td>
+      <td class="mono">this.i18n.get(&#39;app.title&#39;)</td>
+      <td><span class="key mono">app.title</span><div class="mono" style="color:#666">标题</div><div class="mono" style="color:#666">Title</div></td>
+      <td><span class="key mono">app.title</span><div class="mono" style="color:#666">标题</div><div class="mono" style="color:#666">Title</div></td>
+    </tr></tbody>
+      </table>
+    </div></body></html>
