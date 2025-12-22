@@ -27,7 +27,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.writeHtmlReportForTest = exports.main = exports.emitJson = exports.ensureAngularFiles = exports.processTsFile = void 0;
+exports.writeHtmlReportForTest = exports.main = exports.processDictFiles = exports.emitJson = exports.ensureAngularFiles = exports.processTsFile = void 0;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const typescript_1 = __importDefault(require("typescript"));
@@ -169,7 +169,16 @@ function ensureAngularFiles(dictDir, mode) {
     const hasSvc = fs.existsSync(svcPath);
     const hasPipe = fs.existsSync(pipePath);
     if (!hasSvc && mode === 'fix') {
-        const svc = `import { Injectable } from '@angular/core'\nimport { en } from './en'\nimport { zh } from './zh'\n@Injectable({ providedIn: 'root' })\nexport class I18nLocaleService {\n  lang: 'zh'|'en' = 'zh'\n  getLocale() { const cached = localStorage.getItem('i18n-lang'); if (cached) this.lang = cached as any; return this.lang === 'en' ? en as any : zh }\n  get(key: string, params?: Record<string, unknown>) { const pack: any = this.getLocale(); const val = key.split('.').reduce((o,k)=>o?o[k]:undefined, pack); let s = typeof val === 'string' ? val : ''; if (params) { for (const [k,v] of Object.entries(params)) s = s.replace(new RegExp('\\\\{'+k+'\\\\}','g'), String(v)) } return s }\n  setLang(code: 'en'|'zh') { this.lang = code; localStorage.setItem('i18n-lang', code); }\n}`;
+        const svc = `import { Injectable } from '@angular/core'
+import { en } from './en'
+import { zh } from './zh'
+@Injectable({ providedIn: 'root' })
+export class I18nLocaleService {
+  lang: 'zh'|'en' = 'zh'
+  getLocale() { const cached = localStorage.getItem('i18n-lang'); if (cached) this.lang = cached as any; return this.lang === 'en' ? en as any : zh }
+  get(key: string, params?: Record<string, unknown>) { const pack: any = this.getLocale(); const val = key.split('.').reduce((o,k)=>o?o[k]:undefined, pack); let s = typeof val === 'string' ? val : ''; if (params) { for (const [k,v] of Object.entries(params)) s = s.replace(new RegExp('\\\\{'+k+'\\\\}','g'), String(v)) } return s }
+  setLang(code: 'en'|'zh') { this.lang = code; localStorage.setItem('i18n-lang', code); }
+}`;
         fs.mkdirSync(path.dirname(svcPath), { recursive: true });
         fs.writeFileSync(svcPath, svc, 'utf8');
         (0, logger_1.info)('created service', { file: svcPath });
@@ -216,6 +225,72 @@ function emitJson(dictDir, outDir, langs, arrayMode) {
     }
 }
 exports.emitJson = emitJson;
+/**
+ * 专门处理词条读取、拍平并写入文件的函数
+ * @param dictDir 词条文件目录
+ * @param outDir 输出目录
+ * @param langs 语言列表
+ * @param arrayMode 数组模式
+ */
+async function processDictFiles(dictDir, outDir, langs, arrayMode) {
+    const { loadDictFile } = await Promise.resolve().then(() => __importStar(require('../util/dict-simple')));
+    for (const lang of langs) {
+        const fp = path.join(process.cwd(), dictDir, `${lang}.ts`);
+        if (!fs.existsSync(fp)) {
+            (0, logger_1.warn)('lang file missing', { file: fp });
+            continue;
+        }
+        try {
+            // 使用新的 loadDictFile 函数读取词条文件
+            const dictData = await loadDictFile(fp);
+            // 展开对象树到键路径集合
+            const flat = {};
+            flattenDictObject(dictData, '', flat);
+            // 写入JSON文件
+            (0, dict_flatten_1.writeJson)(path.isAbsolute(outDir) ? outDir : path.join(process.cwd(), outDir), lang, flat);
+            (0, logger_1.info)('dict processed and json written', { lang, file: fp, keys: Object.keys(flat).length });
+        }
+        catch (error) {
+            (0, logger_1.warn)('failed to process dict file', { file: fp, error: String(error) });
+        }
+    }
+}
+exports.processDictFiles = processDictFiles;
+/**
+ * 展开对象树到键路径集合
+ * @param obj 对象
+ * @param base 基础路径
+ * @param out 输出集合
+ */
+function flattenDictObject(obj, base, out) {
+    if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+        for (const k of Object.keys(obj)) {
+            const v = obj[k];
+            const next = base ? `${base}.${k}` : k;
+            if (v && typeof v === 'object' && !Array.isArray(v)) {
+                flattenDictObject(v, next, out);
+            }
+            else {
+                out[next] = v;
+            }
+        }
+    }
+    else if (Array.isArray(obj)) {
+        // 处理数组
+        obj.forEach((item, index) => {
+            const next = base ? `${base}.${index}` : `${index}`;
+            if (typeof item === 'object' && item !== null) {
+                flattenDictObject(item, next, out);
+            }
+            else {
+                out[next] = item;
+            }
+        });
+    }
+    else {
+        out[base] = obj;
+    }
+}
 function splitLines(s) { return String(s || '').split(/\r?\n/); }
 function diffLines(a, b) {
     var _a, _b;
@@ -297,12 +372,12 @@ function valueOf(map, key) {
 function main() {
     const args = process.argv.slice(2); // 读取参数
     let mode = 'replace';
-    const usage = `Usage: i18n-refactor [init | --mode=replace|restore|bootstrap|delete|init] [--help] [--version]`;
+    const usage = `Usage: i18n-refactor [init | --mode=replace|restore|bootstrap|delete|init|dict-process] [--help] [--version]`;
     const version = '0.2.0';
     for (const a of args) { // 解析参数
         if (a === 'init')
             mode = 'init';
-        const r = a.match(/^--mode=(replace|restore|bootstrap|delete|init)$/);
+        const r = a.match(/^--mode=(replace|restore|bootstrap|delete|init|dict-process)$/);
         if (r)
             mode = r[1];
         if (a === '--dry-run')
@@ -330,6 +405,11 @@ function main() {
     if (mode === 'bootstrap') {
         ensureAngularFiles(config_1.config.dictDir || 'src/app/i18n', (config_1.config.ensureAngular || 'fix'));
         emitJson(config_1.config.dictDir || 'src/app/i18n', (config_1.config.jsonOutDir || 'i18n-refactor/out'), (config_1.config.languages || ['zh', 'en']), (config_1.config.jsonArrayMode || 'nested'));
+        return;
+    }
+    // 专门处理词条读取、拍平并写入文件的模式
+    if (mode === 'dict-process') {
+        processDictFiles(config_1.config.dictDir || 'src/app/i18n', (config_1.config.jsonOutDir || 'i18n-refactor/out'), (config_1.config.languages || ['zh', 'en']), (config_1.config.jsonArrayMode || 'nested'));
         return;
     }
     const dir = config_1.config.dir || process.cwd();
