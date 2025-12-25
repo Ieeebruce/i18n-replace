@@ -6,7 +6,6 @@
   },
   "scripts": {
     "start": "ng serve",
-    "start:src2": "ng run i18n-demo:serve-src2",
     "refactor:test": "node node_modules/jest/bin/jest.js --colors",
     "i18n-refactor:build": "node node_modules/typescript/bin/tsc -p i18n-refactor/tsconfig.json",
     "i18n-refactor:run": "npm run i18n-refactor:build && node i18n-refactor/dist/src/runner/run-dir.js --dir=src",

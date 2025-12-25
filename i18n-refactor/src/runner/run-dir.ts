@@ -156,17 +156,64 @@ export class I18nLocaleService {
     const pipe = `import { Pipe, PipeTransform } from '@angular/core'\nimport { I18nLocaleService } from './index'\n@Pipe({ name: 'i18n', standalone: true })\nexport class I18nPipe implements PipeTransform { constructor(private locale: I18nLocaleService){} transform(key: string, params?: Record<string, unknown>) { return this.locale.get(key, params) } }`
     fs.mkdirSync(path.dirname(pipePath), { recursive: true }); fs.writeFileSync(pipePath, pipe, 'utf8'); info('created pipe', { file: pipePath })
   } else if (!hasPipe) warn('missing pipe', { suggest: 'create src/app/i18n/i18n.pipe.ts' })
+  // 检查 app.config.ts 是否配置了服务
+  const appConfigPath = path.join(process.cwd(), 'src/app/app.config.ts')
+  if (fs.existsSync(appConfigPath)) {
+    let configContent = readFile(appConfigPath)
+    if (!/I18nLocaleService/.test(configContent)) {
+      if (mode === 'fix') {
+        // 在providers数组中添加I18nLocaleService
+        configContent = configContent.replace(
+          /(providers:\s*\[\s*([^\]]*))/,
+          (_match, fullMatch, existingProviders) => {
+            if (existingProviders.includes('I18nLocaleService')) {
+              return fullMatch // 已存在，无需添加
+            }
+            // 在providers数组开始后添加服务
+            return `providers: [${existingProviders ? existingProviders + ',' : ''}\n    I18nLocaleService]`
+          }
+        )
+        // 如果没有import I18nLocaleService，则添加import
+        if (!/I18nLocaleService/.test(configContent)) {
+          configContent = configContent.replace(
+            /(import\s+\{[^\}]*\}\s+from\s+['"][^'"]*app\/i18n['"];)/,
+            `import { I18nLocaleService } from './i18n';\n$&`
+          )
+        }
+        writeFile(appConfigPath, configContent); info('added service to app config', { file: appConfigPath })
+      } else {
+        warn('service not configured in app config', { file: appConfigPath })
+      }
+    }
+  }
+    
+  // 检查 app.component.ts 是否导入了I18nPipe
   const appComp = path.join(process.cwd(), 'src/app/app.component.ts')
   if (fs.existsSync(appComp)) {
     let s = readFile(appComp)
     if (!/I18nPipe/.test(s)) {
       if (mode === 'fix') {
-        const lastImport = s.lastIndexOf('import ')
-        const eol = s.indexOf('\n', lastImport)
-        if (eol >= 0) s = s.slice(0, eol + 1) + `import { I18nPipe } from './i18n/i18n.pipe'\n` + s.slice(eol + 1)
-        s = s.replace(/imports:\s*\[([^\]]*)\]/, (_m, inside) => `imports: [${inside} , I18nPipe]`)
+        // 找到最后一个import语句后插入import
+        const lastImportMatch = s.match(/import .+?;\n(?=import|$|export)/g)
+        if (lastImportMatch) {
+          const lastImportIndex = s.lastIndexOf('import ')
+          const eol = s.indexOf('\n', lastImportIndex)
+          if (eol >= 0) {
+            s = s.slice(0, eol + 1) + `import { I18nPipe } from './i18n/i18n.pipe'\n` + s.slice(eol + 1)
+          }
+        }
+        // 在imports数组中添加I18nPipe
+        s = s.replace(/imports:\s*\[([^{\]]*)\]/, (_m, inside) => {
+          const imports = inside.split(',').map((imp: string) => imp.trim()).filter((imp: string) => imp)
+          if (!imports.includes('I18nPipe')) {
+            return `imports: [${inside} , I18nPipe]`
+          }
+          return _m
+        })
         writeFile(appComp, s); info('imported pipe globally', { file: appComp })
-      } else warn('pipe not globally imported', { file: appComp })
+      } else {
+        warn('pipe not globally imported', { file: appComp })
+      }
     }
   }
 }
@@ -301,7 +348,7 @@ function extractKeys(line: string, type: 'ts'|'html'): { oldKey: string | null, 
     // Plain interpolation: {{ alias.path }}
     const oPlain = s.match(/\{\{\s*[A-Za-z_]\w*\.([A-Za-z0-9_.]+)\s*\}\}/)
     // Indexed literal: {{ alias.base['lit'] }}
-    const oIndexLit = s.match(/\{\{\s*[A-Za-z_]\w*\.([A-Za-z0-9_.]+)\s*\[\s*['"]([^'"]+)['"]\s*\]\s*\}\}/)
+    const oIndexLit = s.match(/\{\{\s*[A-Za-z_]\w*\.([A-Za-z0-9_.]+)\s*\[\s*['"]([^'"]+)['"]\s*\}\}/)
     // Replace chain: {{ alias.path.replace(...).replace(...)}}
     const oReplace = s.match(/\{\{\s*[A-Za-z_]\w*\.([A-Za-z0-9_.]+)\s*(?:\.replace\([^)]*\))+\s*\}\}/)
     const oldKey = oIndexLit ? `${oIndexLit[1]}.${oIndexLit[2]}` : (oReplace && oReplace[1]) || (oPlain && oPlain[1]) || null
@@ -317,12 +364,12 @@ function valueOf(map: Record<string, any>, key: string | null): string | null {
 
 export function main() {
   const args = process.argv.slice(2) // 读取参数
-  let mode: 'replace' | 'restore' | 'bootstrap' | 'delete' | 'init' | 'dict-process' = 'replace'
-  const usage = `Usage: i18n-refactor [init | --mode=replace|restore|bootstrap|delete|init|dict-process] [--help] [--version]`
+  let mode: 'replace' | 'restore' | 'bootstrap' | 'delete' | 'init' | 'dict-process' | 'ensure-i18n' = 'replace'
+  const usage = `Usage: i18n-refactor [init | --mode=replace|restore|bootstrap|delete|init|dict-process|ensure-i18n] [--help] [--version]`
   const version = '0.2.0'
   for (const a of args) { // 解析参数
     if (a === 'init') mode = 'init'
-    const r = a.match(/^--mode=(replace|restore|bootstrap|delete|init|dict-process)$/)
+    const r = a.match(/^--mode=(replace|restore|bootstrap|delete|init|dict-process|ensure-i18n)$/)
     if (r) mode = r[1] as any
     if (a === '--dry-run') dryRun = true
     if (a === '--help') { process.stdout.write(usage + '\n'); return }
@@ -350,6 +397,13 @@ export function main() {
     processDictFiles(config.dictDir || 'src/app/i18n', (config.jsonOutDir || 'i18n-refactor/out'), (config.languages || ['zh','en']), (config.jsonArrayMode || 'nested'))
     return
   }
+  
+  // 确保i18n服务和管道已正确配置
+  if (mode === 'ensure-i18n') {
+    ensureAngularFiles(config.dictDir || 'src/app/i18n', (config.ensureAngular || 'fix'))
+    return
+  }
+  
   const dir = config.dir || process.cwd()
   const tsFiles = walk(dir, p => p.endsWith('.ts')) // 收集 TS 文件
   const externalAliases = new Map<string, VarAlias[]>()
@@ -524,6 +578,12 @@ export function main() {
   const fp = path.join(outDir, 'report.html')
   fs.writeFileSync(fp, html, 'utf8')
   info('html report written', { file: fp })
+  
+  // 在replace模式完成后，自动确保i18n服务和管道已正确配置
+  if (mode === 'replace' && !dryRun) {
+    info('ensuring i18n configuration after replace', {})
+    ensureAngularFiles(config.dictDir || 'src/app/i18n', 'fix')
+  }
 }
 
 if (require.main === module) {

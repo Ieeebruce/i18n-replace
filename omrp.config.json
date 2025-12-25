@@ -2,7 +2,7 @@
   "serviceTypeName": "I18nLocaleService",
   "serviceVariableName": "i18n",
   "getLocalMethod": "getLocale",
-  "dictDir": "src2/app/i18n",
+  "dictDir": "src/app/i18n",
   "languages": [
     "zh",
     "en"
@@ -10,8 +10,8 @@
   "jsonOutDir": "report",
   "jsonArrayMode": "nested",
   "ensureAngular": "fix",
-  "dir": "src2",
-  "dryRun": true,
+  "dir": "src",
+  "dryRun": false,
   "logLevel": "info",
   "format": "pretty"
 }
