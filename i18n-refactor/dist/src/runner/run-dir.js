@@ -144,7 +144,9 @@ function processTsFile(tsPath, externalAliases) {
     };
     visit(sf);
     const htmlBefore = htmlPath && fs.existsSync(htmlPath) ? readFile(htmlPath) : '';
-    const { tsOut, htmlOut, aliases } = (0, component_1.processComponent)(before, htmlBefore, tsPath, externalAliases);
+    const { tsOut, htmlOut, aliases, complexCases: rawComplexCases } = (0, component_1.processComponent)(before, htmlBefore, tsPath, externalAliases);
+    // 填充文件名
+    const complexCases = rawComplexCases.map(c => ({ ...c, file: tsPath }));
     const changedTs = tsOut !== before;
     const changedHtml = htmlPath ? (htmlOut !== htmlBefore) : false;
     if (changedTs)
@@ -152,7 +154,7 @@ function processTsFile(tsPath, externalAliases) {
     if (htmlPath && changedHtml)
         writeFile(htmlPath, htmlOut);
     processTsFile._last = { tsBefore: before, tsAfter: tsOut, htmlBefore, htmlAfter: htmlOut };
-    return { changed: changedTs || changedHtml, code: tsOut, aliases, htmlPath };
+    return { changed: changedTs || changedHtml, code: tsOut, aliases, htmlPath, complexCases };
 }
 exports.processTsFile = processTsFile;
 // 旧 HTML 别名收集删除，统一由 component.ts 内部实现
@@ -455,6 +457,7 @@ function main() {
         }
     }
     const results = []; // 结果列表
+    const complexCases = []; // 复杂情况列表
     const langs = (config_1.config.languages || ['zh', 'en']);
     const dictDir = config_1.config.dictDir || 'src/app/i18n';
     const arrayMode = (config_1.config.jsonArrayMode || 'nested');
@@ -493,6 +496,8 @@ function main() {
         }
         else {
             const r = processTsFile(f, externalAliases); // 处理 TS 文件
+            // 收集复杂情况
+            complexCases.push(...r.complexCases);
             let deleted;
             if (dryRun) {
                 const dummySf = typescript_1.default.createSourceFile(f, r.code, typescript_1.default.ScriptTarget.Latest, true);
@@ -585,7 +590,7 @@ function main() {
     // Always generate HTML report
     const outDir = path.isAbsolute((config_1.config.jsonOutDir || 'i18n-refactor/out')) ? config_1.config.jsonOutDir : path.join(process.cwd(), (config_1.config.jsonOutDir || 'i18n-refactor/out'));
     fs.mkdirSync(outDir, { recursive: true });
-    const html = renderHtmlReport(summary, results.filter(r => r.changed), details);
+    const html = renderHtmlReport(summary, results.filter(r => r.changed), details, complexCases);
     const fp = path.join(outDir, 'report.html');
     fs.writeFileSync(fp, html, 'utf8');
     (0, logger_1.info)('html report written', { file: fp });
@@ -604,7 +609,7 @@ function escapeHtml(s) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
 }
-function renderHtmlReport(summary, results, details) {
+function renderHtmlReport(summary, results, details, complexCases) {
     const head = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>I18n Refactor Report</title><style>
 body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:24px;background:#fafafa;color:#222}
 .summary{display:flex;gap:16px;margin-bottom:20px}
@@ -651,12 +656,46 @@ th{background:#f6f6f6}
       </table>
     </div>`;
     }).join('');
+    // 复杂情况部分
+    const complexCasesHtml = complexCases.length > 0 ? `
+    <div class="section-title" style="margin-top:32px">Complex Cases (${complexCases.length})</div>
+    <div style="margin:16px 0">
+      <table>
+        <thead>
+          <tr>
+            <th>File</th>
+            <th>Line</th>
+            <th>Type</th>
+            <th>Severity</th>
+            <th>Code</th>
+            <th>Reason</th>
+            <th>Suggestion</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${complexCases.map(c => {
+        const severityColor = c.severity === 'error' ? '#d00' : c.severity === 'warning' ? '#f90' : '#999';
+        const typeLabel = c.type.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        return `<tr>
+              <td class="mono" style="font-size:12px">${escapeHtml(c.file)}</td>
+              <td>${c.line}</td>
+              <td><span style="background:#f0f0f0;padding:2px 6px;border-radius:3px;font-size:12px">${escapeHtml(typeLabel)}</span></td>
+              <td><span style="color:${severityColor};font-weight:600">${escapeHtml(c.severity)}</span></td>
+              <td class="mono" style="background:#f9f9f9;font-size:12px">${escapeHtml(c.code)}</td>
+              <td style="font-size:12px">${escapeHtml(c.reason)}</td>
+              <td style="font-size:12px;color:#666">${escapeHtml(c.suggestion)}</td>
+            </tr>`;
+    }).join('')}
+        </tbody>
+      </table>
+    </div>
+  ` : '';
     const tail = `</body></html>`;
-    return head + sum + list + `<div class="section-title">Changes</div>` + detailHtml + tail;
+    return head + sum + list + `<div class="section-title">Changes</div>` + detailHtml + complexCasesHtml + tail;
 }
-function writeHtmlReportForTest(outDir, summary, results, details) {
+function writeHtmlReportForTest(outDir, summary, results, details, complexCases = []) {
     fs.mkdirSync(outDir, { recursive: true });
-    const html = renderHtmlReport(summary, results, details);
+    const html = renderHtmlReport(summary, results, details, complexCases);
     const fp = path.join(outDir, 'report.html');
     fs.writeFileSync(fp, html, 'utf8');
     return fp;

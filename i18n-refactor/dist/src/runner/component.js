@@ -138,6 +138,7 @@ function filterLeafAliases(tsCode, aliases) {
 }
 function replaceTs(src, externalAliases) {
     let s = src;
+    const complexCases = []; // 收集复杂情况
     let { aliases, serviceName } = buildAliases(src, externalAliases);
     const replaceVar = serviceName || config_1.config.serviceVariableName;
     const sfAst = typescript_1.default.createSourceFile('x.ts', s, typescript_1.default.ScriptTarget.Latest, true, typescript_1.default.ScriptKind.TS);
@@ -208,6 +209,19 @@ function replaceTs(src, externalAliases) {
                         if (!seen.has(key)) {
                             reps.push({ s: outer.getStart(sfAst), e: outer.getEnd(), text });
                             seen.add(key);
+                            // 检测复杂情况：动态 key
+                            if (res.dynamicSegments && res.dynamicSegments.length > 0) {
+                                const lineNumber = sfAst.getLineAndCharacterOfPosition(outer.getStart(sfAst)).line + 1;
+                                complexCases.push({
+                                    file: '', // 将由调用者填充
+                                    line: lineNumber,
+                                    type: 'dynamic-key',
+                                    severity: 'warning',
+                                    code: outer.getText(sfAst),
+                                    reason: `使用了动态 key: ${res.dynamicSegments.join(', ')}`,
+                                    suggestion: '请确认动态 key 的范围在预期内，并确保相关词条存在'
+                                });
+                            }
                         }
                     }
                 }
@@ -341,7 +355,7 @@ function replaceTs(src, externalAliases) {
         });
     }
     if (serviceName) {
-        s = s.replace(new RegExp(`this\\.([A-Za-z_]\\w*)\\s*=\\s*this\\.${serviceName}\\.(?:getLocale|getLocal)\\([^)]*\\)\\.([A-Za-z0-9_.]+)`, 'g'), (_m, v, path) => {
+        s = s.replace(new RegExp(`this\.([A-Za-z_]\w*)\s*=\s*this\.${serviceName}\.(?:getLocale|getLocal)\([^)]*\)\.([A-Za-z0-9_.]+)`, 'g'), (_m, v, path) => {
             const segs = String(path).split('.');
             const root = segs.shift() || '';
             const rest = segs.join('.');
@@ -351,7 +365,7 @@ function replaceTs(src, externalAliases) {
             return _m;
         });
     }
-    return s;
+    return { code: s, complexCases };
 }
 function replaceHtml(src, aliases) {
     let s = src; // 工作副本
@@ -547,12 +561,16 @@ function processComponent(tsCode, htmlCode, filePath, externalAliases) {
     const { aliases: rawAliases, serviceName } = buildAliases(tsCode, externalAliases); // 基于原始 TS 构建别名
     const aliasInfos = filterLeafAliases(tsCode, rawAliases);
     const varNames = rawAliases.map(a => a.name); // 收集所有别名变量名（包括未使用的，以便清理定义）
-    let tsOut = replaceTs(tsCode, externalAliases); // 统一 TS 访问形态
+    const tsResult = replaceTs(tsCode, externalAliases); // 统一 TS 访问形态
+    let tsOut = tsResult.code;
+    const complexCases = tsResult.complexCases;
     // 统一别名 get 调用到 this.i18n.get(...)
     for (const ai of aliasInfos) { // 遍历别名
         const target = config_1.config.serviceVariableName || 'i18n';
         if (ai.name !== target) { // 非 service 别名统一指向 service
-            tsOut = tsOut.replace(new RegExp(`this\\.${ai.name}\\.get(?!Locale)\\s*\\(`, 'g'), `this.${target}.get(`); // 调用替换
+            // 转义别名名称中的特殊字符
+            const escapedName = ai.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            tsOut = tsOut.replace(new RegExp(`this\\.${escapedName}\\.get(?!Locale)\\s*\\(`, 'g'), `this.${target}.get(`); // 调用替换
         }
     }
     // Removed aggressive constructor renaming to respect user's service variable name
@@ -562,6 +580,6 @@ function processComponent(tsCode, htmlCode, filePath, externalAliases) {
     tsOut = tsOut.replace(/(\r?\n){3,}/g, '\n\n');
     const { aliases: htmlAliases } = buildAliases(tsCode, externalAliases); // 基于原 TS 收集用于 HTML 的别名
     const htmlOut = replaceHtml(htmlCode, htmlAliases); // 替换模板
-    return { tsOut, htmlOut, aliases: varNames }; // 返回结果
+    return { tsOut, htmlOut, aliases: varNames, complexCases }; // 返回结果
 }
 exports.processComponent = processComponent;

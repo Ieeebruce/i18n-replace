@@ -5,7 +5,7 @@ import ts from 'typescript'
 import { config, loadConfig } from '../core/config'
 import { configureLogger, info, warn } from '../util/logger'
 import { setDictDir } from '../util/dict-reader'
-import { processComponent } from './component'
+import { processComponent, ComplexCase } from './component'
 import { flattenLangFile, writeJson } from '../util/dict-flatten'
 import { pruneUnused } from '../replace/prune'
 import { collectVarAliases, ExternalAliasMap, VarAlias } from '../core/var-alias'
@@ -84,7 +84,7 @@ function restoreHtmlContent(src: string, alias: string | null): string { // 将�
   return s
 }
 
-export function processTsFile(tsPath: string, externalAliases?: ExternalAliasMap): { changed: boolean; code: string; aliases: string[]; htmlPath: string | null } {
+export function processTsFile(tsPath: string, externalAliases?: ExternalAliasMap): { changed: boolean; code: string; aliases: string[]; htmlPath: string | null; complexCases: ComplexCase[] } {
   const before = readFile(tsPath)
   const sf = ts.createSourceFile(tsPath, before, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
   // detect Angular Component and templateUrl
@@ -114,13 +114,15 @@ export function processTsFile(tsPath: string, externalAliases?: ExternalAliasMap
   }
   visit(sf)
   const htmlBefore = htmlPath && fs.existsSync(htmlPath) ? readFile(htmlPath) : ''
-  const { tsOut, htmlOut, aliases } = processComponent(before, htmlBefore, tsPath, externalAliases)
+  const { tsOut, htmlOut, aliases, complexCases: rawComplexCases } = processComponent(before, htmlBefore, tsPath, externalAliases)
+  // 填充文件名
+  const complexCases = rawComplexCases.map(c => ({ ...c, file: tsPath }))
   const changedTs = tsOut !== before
   const changedHtml = htmlPath ? (htmlOut !== htmlBefore) : false
   if (changedTs) writeFile(tsPath, tsOut)
   if (htmlPath && changedHtml) writeFile(htmlPath, htmlOut)
   ;(processTsFile as any)._last = { tsBefore: before, tsAfter: tsOut, htmlBefore, htmlAfter: htmlOut }
-  return { changed: changedTs || changedHtml, code: tsOut, aliases, htmlPath }
+  return { changed: changedTs || changedHtml, code: tsOut, aliases, htmlPath, complexCases }
 }
 
 // 旧 HTML 别名收集删除，统一由 component.ts 内部实现
@@ -390,6 +392,7 @@ export function main() {
     }
   }
   const results: Array<{ file: string; type: 'ts'|'html'; changed: boolean; deleted?: string[] }> = [] // 结果列表
+  const complexCases: ComplexCase[] = [] // 复杂情况列表
   const langs = (config.languages || ['zh','en'])
   const dictDir = config.dictDir || 'src/app/i18n'
   const arrayMode = (config.jsonArrayMode || 'nested')
@@ -425,6 +428,9 @@ export function main() {
       if (tsChanges.length || (deleted && deleted.length)) details.push({ file: f, type: 'ts', changes: tsChanges, deleted })
     } else {
       const r = processTsFile(f, externalAliases) // 处理 TS 文件
+      
+      // 收集复杂情况
+      complexCases.push(...r.complexCases)
       
       let deleted: string[] | undefined
       if (dryRun) {
@@ -514,7 +520,7 @@ export function main() {
   // Always generate HTML report
   const outDir = path.isAbsolute((config.jsonOutDir || 'i18n-refactor/out')) ? (config.jsonOutDir as string) : path.join(process.cwd(), (config.jsonOutDir || 'i18n-refactor/out'))
   fs.mkdirSync(outDir, { recursive: true })
-  const html = renderHtmlReport(summary, results.filter(r => r.changed), details)
+  const html = renderHtmlReport(summary, results.filter(r => r.changed), details, complexCases)
   const fp = path.join(outDir, 'report.html')
   fs.writeFileSync(fp, html, 'utf8')
   info('html report written', { file: fp })
@@ -539,7 +545,8 @@ function escapeHtml(s: string): string {
 function renderHtmlReport(
   summary: { dir: string; files: number; changed: number; missingKeys: number },
   results: Array<{ file: string; type: 'ts'|'html'; changed: boolean; deleted?: string[] }>,
-  details: Array<{ file: string; type: 'ts'|'html'; changes: Array<{ line: number; before: string; after: string; beforeKey: string | null; afterKey: string | null; zhBefore: string | null; enBefore: string | null; zhAfter: string | null; enAfter: string | null }>; deleted?: string[] }>
+  details: Array<{ file: string; type: 'ts'|'html'; changes: Array<{ line: number; before: string; after: string; beforeKey: string | null; afterKey: string | null; zhBefore: string | null; enBefore: string | null; zhAfter: string | null; enAfter: string | null }>; deleted?: string[] }>,
+  complexCases: ComplexCase[]
 ): string {
   const head = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>I18n Refactor Report</title><style>
 body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:24px;background:#fafafa;color:#222}
@@ -589,18 +596,55 @@ th{background:#f6f6f6}
       </table>
     </div>`
   }).join('')
+  
+  // 复杂情况部分
+  const complexCasesHtml = complexCases.length > 0 ? `
+    <div class="section-title" style="margin-top:32px">Complex Cases (${complexCases.length})</div>
+    <div style="margin:16px 0">
+      <table>
+        <thead>
+          <tr>
+            <th>File</th>
+            <th>Line</th>
+            <th>Type</th>
+            <th>Severity</th>
+            <th>Code</th>
+            <th>Reason</th>
+            <th>Suggestion</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${complexCases.map(c => {
+            const severityColor = c.severity === 'error' ? '#d00' : c.severity === 'warning' ? '#f90' : '#999'
+            const typeLabel = c.type.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+            return `<tr>
+              <td class="mono" style="font-size:12px">${escapeHtml(c.file)}</td>
+              <td>${c.line}</td>
+              <td><span style="background:#f0f0f0;padding:2px 6px;border-radius:3px;font-size:12px">${escapeHtml(typeLabel)}</span></td>
+              <td><span style="color:${severityColor};font-weight:600">${escapeHtml(c.severity)}</span></td>
+              <td class="mono" style="background:#f9f9f9;font-size:12px">${escapeHtml(c.code)}</td>
+              <td style="font-size:12px">${escapeHtml(c.reason)}</td>
+              <td style="font-size:12px;color:#666">${escapeHtml(c.suggestion)}</td>
+            </tr>`
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  ` : ''
+  
   const tail = `</body></html>`
-  return head + sum + list + `<div class="section-title">Changes</div>` + detailHtml + tail
+  return head + sum + list + `<div class="section-title">Changes</div>` + detailHtml + complexCasesHtml + tail
 }
 
 export function writeHtmlReportForTest(
   outDir: string,
   summary: { dir: string; files: number; changed: number; missingKeys: number },
   results: Array<{ file: string; type: 'ts'|'html'; changed: boolean; deleted?: string[] }>,
-  details: Array<{ file: string; type: 'ts'|'html'; changes: Array<{ line: number; before: string; after: string; beforeKey: string | null; afterKey: string | null; zhBefore: string | null; enBefore: string | null; zhAfter: string | null; enAfter: string | null }>; deleted?: string[] }>
+  details: Array<{ file: string; type: 'ts'|'html'; changes: Array<{ line: number; before: string; after: string; beforeKey: string | null; afterKey: string | null; zhBefore: string | null; enBefore: string | null; zhAfter: string | null; enAfter: string | null }>; deleted?: string[] }>,
+  complexCases: ComplexCase[] = []
 ) {
   fs.mkdirSync(outDir, { recursive: true })
-  const html = renderHtmlReport(summary, results, details)
+  const html = renderHtmlReport(summary, results, details, complexCases)
   const fp = path.join(outDir, 'report.html')
   fs.writeFileSync(fp, html, 'utf8')
   return fp
