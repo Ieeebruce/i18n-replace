@@ -1,0 +1,150 @@
+<div class="data-table-container" style="padding: 2rem;">
+  <h2>{{ i18n.table.columns.name }} {{ i18n.common.message.noData }}</h2>
+  
+  <!-- 工具栏 -->
+  <div class="toolbar" style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+    <!-- 搜索 -->
+    <div class="search-box" style="flex: 1; max-width: 300px;">
+      <input 
+        type="text" 
+        [(ngModel)]="searchKeyword" 
+        (keyup.enter)="search()"
+        [placeholder]="i18n.table.filter.placeholder"
+        style="width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px;">
+      <button 
+        (click)="search()" 
+        style="margin-left: 0.5rem; padding: 0.5rem 1rem; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+        {{ i18n.common.button.search }}
+      </button>
+    </div>
+    
+    <!-- 筛选按钮 -->
+    <div class="filter-buttons" style="display: flex; gap: 0.5rem;">
+      <button 
+        (click)="setFilter('all')" 
+        [style.background-color]="currentFilter === 'all' ? '#007bff' : '#6c757d'"
+        style="padding: 0.5rem 1rem; color: white; border: none; border-radius: 4px; cursor: pointer;">
+        {{ i18n.table.filter.all }}
+      </button>
+      <button 
+        (click)="setFilter('active')" 
+        [style.background-color]="currentFilter === 'active' ? '#28a745' : '#6c757d'"
+        style="padding: 0.5rem 1rem; color: white; border: none; border-radius: 4px; cursor: pointer;">
+        {{ i18n.table.filter.active }}
+      </button>
+      <button 
+        (click)="setFilter('inactive')" 
+        [style.background-color]="currentFilter === 'inactive' ? '#dc3545' : '#6c757d'"
+        style="padding: 0.5rem 1rem; color: white; border: none; border-radius: 4px; cursor: pointer;">
+        {{ i18n.table.filter.inactive }}
+      </button>
+      <button 
+        (click)="refresh()" 
+        style="padding: 0.5rem 1rem; background-color: #17a2b8; color: white; border: none; border-radius: 4px; cursor: pointer;">
+        {{ i18n.table.actions.refresh }}
+      </button>
+    </div>
+  </div>
+
+  <!-- 数据表格 -->
+  <table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">
+    <thead style="background-color: #f8f9fa;">
+      <tr>
+        <th (click)="sort('id')" style="padding: 0.75rem; border: 1px solid #ddd; cursor: pointer;">
+          {{ i18n.table.columns.id }}
+          <span *ngIf="sortColumn === 'id'">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
+        </th>
+        <th (click)="sort('name')" style="padding: 0.75rem; border: 1px solid #ddd; cursor: pointer;">
+          {{ i18n.table.columns.name }}
+          <span *ngIf="sortColumn === 'name'">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
+        </th>
+        <th style="padding: 0.75rem; border: 1px solid #ddd;">{{ i18n.table.columns.email }}</th>
+        <th style="padding: 0.75rem; border: 1px solid #ddd;">{{ i18n.table.columns.phone }}</th>
+        <th (click)="sort('status')" style="padding: 0.75rem; border: 1px solid #ddd; cursor: pointer;">
+          {{ i18n.table.columns.status }}
+          <span *ngIf="sortColumn === 'status'">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
+        </th>
+        <th (click)="sort('createTime')" style="padding: 0.75rem; border: 1px solid #ddd; cursor: pointer;">
+          {{ i18n.table.columns.createTime }}
+          <span *ngIf="sortColumn === 'createTime'">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
+        </th>
+        <th style="padding: 0.75rem; border: 1px solid #ddd;">{{ i18n.table.columns.actions }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let user of getPaginatedUsers()" style="border-bottom: 1px solid #ddd;">
+        <td style="padding: 0.75rem; border: 1px solid #ddd;">{{ user.id }}</td>
+        <td style="padding: 0.75rem; border: 1px solid #ddd;">{{ user.name }}</td>
+        <td style="padding: 0.75rem; border: 1px solid #ddd;">{{ user.email }}</td>
+        <td style="padding: 0.75rem; border: 1px solid #ddd;">{{ user.phone }}</td>
+        <td style="padding: 0.75rem; border: 1px solid #ddd;">
+          <span 
+            [style.color]="user.status === 'active' ? '#28a745' : '#dc3545'"
+            [style.font-weight]="'bold'">
+            {{ user.status === 'active' ? i18n.table.filter.active : i18n.table.filter.inactive }}
+          </span>
+        </td>
+        <td style="padding: 0.75rem; border: 1px solid #ddd;">{{ user.createTime }}</td>
+        <td style="padding: 0.75rem; border: 1px solid #ddd;">
+          <button 
+            (click)="viewUser(user)" 
+            style="margin-right: 0.25rem; padding: 0.25rem 0.5rem; background-color: #17a2b8; color: white; border: none; border-radius: 3px; cursor: pointer;">
+            {{ i18n.table.actions.view }}
+          </button>
+          <button 
+            (click)="editUser(user)" 
+            style="margin-right: 0.25rem; padding: 0.25rem 0.5rem; background-color: #ffc107; color: white; border: none; border-radius: 3px; cursor: pointer;">
+            {{ i18n.table.actions.edit }}
+          </button>
+          <button 
+            (click)="deleteUser(user)" 
+            style="padding: 0.25rem 0.5rem; background-color: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer;">
+            {{ i18n.table.actions.delete }}
+          </button>
+        </td>
+      </tr>
+      <tr *ngIf="filteredUsers.length === 0">
+        <td colspan="7" style="padding: 2rem; text-align: center; color: #6c757d;">
+          {{ i18n.common.message.noData }}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- 分页 -->
+  <div class="pagination" style="margin-top: 1rem; display: flex; justify-content: space-between; align-items: center;">
+    <div class="pagination-info">
+      {{ i18n.common.pagination.total.replace('{total}', totalItems.toString()) }}
+      {{ i18n.common.pagination.pageSize.replace('{size}', pageSize.toString()) }}
+    </div>
+    <div class="pagination-controls" style="display: flex; gap: 0.5rem; align-items: center;">
+      <button 
+        (click)="goToPage(1)" 
+        [disabled]="currentPage === 1"
+        style="padding: 0.25rem 0.5rem; background-color: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">
+        «
+      </button>
+      <button 
+        (click)="goToPage(currentPage - 1)" 
+        [disabled]="currentPage === 1"
+        style="padding: 0.25rem 0.5rem; background-color: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">
+        ‹
+      </button>
+      <span style="padding: 0 1rem;">
+        {{ i18n.common.pagination.page }} {{ currentPage }} / {{ getTotalPages() }}
+      </span>
+      <button 
+        (click)="goToPage(currentPage + 1)" 
+        [disabled]="currentPage === getTotalPages()"
+        style="padding: 0.25rem 0.5rem; background-color: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">
+        ›
+      </button>
+      <button 
+        (click)="goToPage(getTotalPages())" 
+        [disabled]="currentPage === getTotalPages()"
+        style="padding: 0.25rem 0.5rem; background-color: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">
+        »
+      </button>
+    </div>
+  </div>
+</div>
