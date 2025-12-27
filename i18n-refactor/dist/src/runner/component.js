@@ -461,68 +461,105 @@ function injectService(code, filePath) {
     const sf = typescript_1.default.createSourceFile('x.ts', code, typescript_1.default.ScriptTarget.Latest, true, typescript_1.default.ScriptKind.TS);
     let s = code;
     const insertions = [];
+    const replacements = [];
     let addedService = false;
+    // 首先，找出所有需要重命名的国际化服务参数
+    const serviceParams = [];
     const visit = (node) => {
         if (typescript_1.default.isClassDeclaration(node)) {
-            let usesService = false;
+            // 不再只在检测到使用了服务变量名时才处理
+            // 而是总是检查构造函数中是否有国际化服务参数
             const varName = config_1.config.serviceVariableName;
-            const checkUsage = (n) => {
-                if (typescript_1.default.isPropertyAccessExpression(n)) {
-                    if (n.expression.kind === typescript_1.default.SyntaxKind.ThisKeyword && n.name.text === varName) {
-                        usesService = true;
-                    }
+            let ctor;
+            for (const m of node.members) {
+                if (typescript_1.default.isConstructorDeclaration(m)) {
+                    ctor = m;
+                    break;
                 }
-                if (!usesService)
-                    typescript_1.default.forEachChild(n, checkUsage);
-            };
-            typescript_1.default.forEachChild(node, checkUsage);
-            if (usesService) {
-                let ctor;
-                for (const m of node.members) {
-                    if (typescript_1.default.isConstructorDeclaration(m)) {
-                        ctor = m;
+            }
+            if (ctor) {
+                let hasService = false;
+                let existingParamIndex = -1;
+                for (let i = 0; i < ctor.parameters.length; i++) {
+                    const p = ctor.parameters[i];
+                    if (p.type && typescript_1.default.isTypeReferenceNode(p.type) && typescript_1.default.isIdentifier(p.type.typeName) && p.type.typeName.text === config_1.config.serviceTypeName) {
+                        hasService = true;
+                        existingParamIndex = i;
+                        // 如果参数名不是配置的名称，需要重命名
+                        if (typescript_1.default.isIdentifier(p.name) && p.name.text !== varName) {
+                            const oldName = p.name.text;
+                            // 记录需要重命名的参数
+                            serviceParams.push({ oldName, newName: varName, pos: p.name.getStart(sf), end: p.name.getEnd() });
+                        }
                         break;
                     }
                 }
-                if (ctor) {
-                    let hasService = false;
-                    for (const p of ctor.parameters) {
-                        if (typescript_1.default.isIdentifier(p.name) && p.name.text === varName)
-                            hasService = true;
-                    }
-                    if (!hasService) {
-                        const paramText = `private ${varName}: ${config_1.config.serviceTypeName}`;
-                        if (ctor.parameters.length > 0) {
-                            insertions.push({ pos: ctor.parameters[0].getStart(sf), text: paramText + ', ' });
-                        }
-                        else {
-                            const openParen = ctor.getChildren(sf).find(t => t.kind === typescript_1.default.SyntaxKind.OpenParenToken);
-                            if (openParen) {
-                                insertions.push({ pos: openParen.end, text: paramText });
-                            }
-                        }
-                        addedService = true;
-                    }
-                }
-                else {
+                if (!hasService) {
                     const paramText = `private ${varName}: ${config_1.config.serviceTypeName}`;
-                    const ctorText = `\n  constructor(${paramText}) {}\n`;
-                    if (node.members.length > 0) {
-                        insertions.push({ pos: node.members[0].getFullStart(), text: ctorText });
+                    if (ctor.parameters.length > 0) {
+                        insertions.push({ pos: ctor.parameters[0].getStart(sf), text: paramText + ', ' });
                     }
                     else {
-                        const closeBrace = node.getChildren(sf).find(t => t.kind === typescript_1.default.SyntaxKind.CloseBraceToken);
-                        if (closeBrace) {
-                            insertions.push({ pos: closeBrace.getStart(sf), text: ctorText });
+                        const openParen = ctor.getChildren(sf).find(t => t.kind === typescript_1.default.SyntaxKind.OpenParenToken);
+                        if (openParen) {
+                            insertions.push({ pos: openParen.end, text: paramText });
                         }
                     }
                     addedService = true;
                 }
             }
+            else {
+                const paramText = `private ${varName}: ${config_1.config.serviceTypeName}`;
+                const ctorText = `\n  constructor(${paramText}) {}\n`;
+                if (node.members.length > 0) {
+                    insertions.push({ pos: node.members[0].getFullStart(), text: ctorText });
+                }
+                else {
+                    const closeBrace = node.getChildren(sf).find(t => t.kind === typescript_1.default.SyntaxKind.CloseBraceToken);
+                    if (closeBrace) {
+                        insertions.push({ pos: closeBrace.getStart(sf), text: ctorText });
+                    }
+                }
+                addedService = true;
+            }
         }
         typescript_1.default.forEachChild(node, visit);
     };
     visit(sf);
+    // 重命名服务参数名
+    for (const param of serviceParams) {
+        // 重命名参数
+        replacements.push({ start: param.pos, end: param.end, text: param.newName });
+        // 重命名整个文件中对旧参数名的引用，但要非常精确，避免误替换
+        // 只替换 this.oldName 这种模式
+        let tempS = s;
+        // 替换 this.oldName 模式
+        const thisRegex = new RegExp(`this\\.${param.oldName}\\.`, 'g');
+        tempS = tempS.replace(thisRegex, `this.${param.newName}.`);
+        // 替换 this.oldName( 模式（方法调用）
+        const callRegex = new RegExp(`this\\.${param.oldName}\\(`, 'g');
+        tempS = tempS.replace(callRegex, `this.${param.newName}(`);
+        // 替换 this.oldName, 模式（属性访问后的逗号）
+        const commaRegex = new RegExp(`this\\.${param.oldName},`, 'g');
+        tempS = tempS.replace(commaRegex, `this.${param.newName},`);
+        // 替换 this.oldName) 模式（属性访问后的右括号）
+        const parenRegex = new RegExp(`this\\.${param.oldName}\\)`, 'g');
+        tempS = tempS.replace(parenRegex, `this.${param.newName})`);
+        // 替换 this.oldName; 模式（属性访问后的分号）
+        const semicolonRegex = new RegExp(`this\\.${param.oldName};`, 'g');
+        tempS = tempS.replace(semicolonRegex, `this.${param.newName};`);
+        // 替换 this.oldName<空格> 模式
+        const spaceRegex = new RegExp(`this\\.${param.oldName}(?=\\s)`, 'g');
+        tempS = tempS.replace(spaceRegex, `this.${param.newName}`);
+        if (tempS !== s) {
+            s = tempS;
+        }
+    }
+    // 先处理替换（参数名重命名）
+    replacements.sort((a, b) => b.start - a.start);
+    for (const rep of replacements) {
+        s = s.slice(0, rep.start) + rep.text + s.slice(rep.end);
+    }
     insertions.sort((a, b) => b.pos - a.pos);
     for (const ins of insertions) {
         s = s.slice(0, ins.pos) + ins.text + s.slice(ins.pos);
@@ -553,6 +590,23 @@ function injectService(code, filePath) {
             else {
                 s = importStmt + s;
             }
+        }
+    }
+    // 为了兼容性，确保I18nAdapterService也被导入
+    if (!s.includes('I18nAdapterService') && s.includes('I18nLocaleService')) {
+        const adapterImport = `import { I18nAdapterService } from './i18n/i18n-adapter';\n`;
+        const lastImport = s.lastIndexOf('import ');
+        if (lastImport >= 0) {
+            const eol = s.indexOf('\n', lastImport);
+            if (eol >= 0) {
+                s = s.slice(0, eol + 1) + adapterImport + s.slice(eol + 1);
+            }
+            else {
+                s = s + '\n' + adapterImport;
+            }
+        }
+        else {
+            s = adapterImport + s;
         }
     }
     return s;

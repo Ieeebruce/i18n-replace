@@ -27,7 +27,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.writeHtmlReportForTest = exports.main = exports.processDictFiles = exports.emitJson = exports.ensureAngularFiles = exports.processTsFile = void 0;
+exports.writeHtmlReportForTest = exports.main = exports.processDictFiles = exports.emitJson = exports.ensureAngularFiles = exports.injectNgxTranslate = exports.processTsFile = void 0;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const typescript_1 = __importDefault(require("typescript"));
@@ -165,21 +165,485 @@ function processHtmlRestore(htmlPath, alias) {
         writeFile(htmlPath, after);
     return { changed: after !== before };
 }
+function checkAndInstallNgxTranslate(mode) {
+    const packageJsonPath = path.join(process.cwd(), 'package.json');
+    if (!fs.existsSync(packageJsonPath)) {
+        (0, logger_1.warn)('package.json not found', { suggest: 'run from project root' });
+        return;
+    }
+    const packageJson = JSON.parse(readFile(packageJsonPath));
+    const hasNgxTranslate = packageJson.dependencies && (packageJson.dependencies['@ngx-translate/core'] ||
+        packageJson.devDependencies && packageJson.devDependencies['@ngx-translate/core']);
+    if (!hasNgxTranslate) {
+        if (mode === 'fix') {
+            (0, logger_1.info)('installing @ngx-translate/core', {});
+            const { spawnSync } = require('child_process');
+            const result = spawnSync('npm', ['install', '@ngx-translate/core'], { stdio: 'inherit' });
+            if (result.status !== 0) {
+                (0, logger_1.warn)('failed to install @ngx-translate/core', { error: result.error });
+            }
+            else {
+                (0, logger_1.info)('installed @ngx-translate/core', {});
+            }
+        }
+        else {
+            (0, logger_1.warn)('missing @ngx-translate/core package', { suggest: 'npm install @ngx-translate/core' });
+        }
+    }
+    else {
+        (0, logger_1.info)('@ngx-translate/core already installed', {});
+    }
+}
+function createNgxTranslateService(dictDir, mode) {
+    const servicePath = path.join(process.cwd(), 'src/app/core/i18n.service.ts');
+    // 确保 core 目录存在
+    const coreDir = path.join(process.cwd(), 'src/app/core');
+    if (!fs.existsSync(coreDir)) {
+        if (mode === 'fix') {
+            fs.mkdirSync(coreDir, { recursive: true });
+            (0, logger_1.info)('created core directory', { path: coreDir });
+        }
+        else {
+            (0, logger_1.warn)('core directory missing', { suggest: 'create src/app/core' });
+            return;
+        }
+    }
+    if (!fs.existsSync(servicePath)) {
+        if (mode === 'fix') {
+            const serviceContent = `import { Injectable } from '@angular/core';
+import { TranslateService } from '@ngx-translate/core';
+
+@Injectable({ providedIn: 'root' })
+export class I18nService {
+  constructor(public translate: TranslateService) {
+    // 设置默认语言
+    this.translate.setDefaultLang('zh');
+    // 尝试从本地存储获取语言设置
+    const savedLang = localStorage.getItem('language');
+    if (savedLang) {
+      this.translate.use(savedLang);
+    } else {
+      // 检测浏览器语言
+      const browserLang = this.translate.getBrowserLang();
+      this.translate.use(browserLang?.match(/en|zh/) ? browserLang : 'zh');
+    }
+  }
+
+  // 切换语言
+  setLanguage(lang: string) {
+    this.translate.use(lang);
+    localStorage.setItem('language', lang);
+  }
+
+  // 获取当前语言
+  getCurrentLanguage(): string {
+    return this.translate.currentLang;
+  }
+
+  // 翻译文本
+  t(key: string, params?: any): string {
+    return this.translate.instant(key, params);
+  }
+
+  // 异步翻译文本
+  get(key: string, params?: any) {
+    return this.translate.get(key, params);
+  }
+}
+`;
+            fs.writeFileSync(servicePath, serviceContent, 'utf8');
+            (0, logger_1.info)('created i18n service', { file: servicePath });
+        }
+        else {
+            (0, logger_1.warn)('missing i18n service', { suggest: 'create src/app/core/i18n.service.ts' });
+        }
+    }
+    else {
+        (0, logger_1.info)('i18n service already exists', { file: servicePath });
+    }
+}
+function modifyAppModule(mode) {
+    // 尝试修改 app.config.ts (Angular 17+ 的新配置方式)
+    const appConfigPath = path.join(process.cwd(), 'src/app/app.config.ts');
+    if (fs.existsSync(appConfigPath)) {
+        modifyAppConfig(appConfigPath, mode);
+        return;
+    }
+    // 如果 app.config.ts 不存在，尝试 app.module.ts
+    const appModulePath = path.join(process.cwd(), 'src/app/app.module.ts');
+    if (fs.existsSync(appModulePath)) {
+        modifyAppModuleFile(appModulePath, mode);
+    }
+    else {
+        (0, logger_1.warn)('app config/module not found', { suggest: 'check src/app/app.config.ts or src/app/app.module.ts' });
+    }
+}
+function modifyAppConfig(appConfigPath, mode) {
+    let content = readFile(appConfigPath);
+    // 检查是否已导入 TranslateModule
+    if (!content.includes('@ngx-translate/core')) {
+        if (mode === 'fix') {
+            // 确保安装了 http-loader 包
+            const { spawnSync } = require('child_process');
+            spawnSync('npm', ['install', '@ngx-translate/http-loader'], { stdio: 'inherit' });
+            // 构建新的内容
+            let modifiedContent = content;
+            // 1. 添加必要的导入语句
+            if (!modifiedContent.includes('import { importProvidersFrom } from')) {
+                modifiedContent = `import { importProvidersFrom } from '@angular/core';\n` + modifiedContent;
+            }
+            if (!modifiedContent.includes('@ngx-translate/core')) {
+                modifiedContent = `import { TranslateModule, TranslateLoader } from '@ngx-translate/core';\nimport { TranslateHttpLoader } from '@ngx-translate/http-loader';\n` + modifiedContent;
+            }
+            if (!modifiedContent.includes('@angular/common/http')) {
+                modifiedContent = `import { HttpClient } from '@angular/common/http';\n` + modifiedContent;
+            }
+            // 2. 添加HttpLoaderFactory函数（如果不存在）
+            if (!modifiedContent.includes('HttpLoaderFactory')) {
+                modifiedContent += `\n\nexport function HttpLoaderFactory(http: HttpClient) {
+  return new TranslateHttpLoader(http);
+}\n`;
+            }
+            // 3. 添加TranslateModule到providers配置
+            if (modifiedContent.includes('providers: [')) {
+                // 如果providers是数组形式
+                if (!modifiedContent.includes('importProvidersFrom(TranslateModule')) {
+                    modifiedContent = modifiedContent.replace(/(providers:\s*\[)/, 'providers: [\n    importProvidersFrom(TranslateModule.forRoot({\n      loader: {\n        provide: TranslateLoader,\n        useFactory: HttpLoaderFactory,\n        deps: [HttpClient]\n      }\n    })),\n  ');
+                }
+            }
+            else if (modifiedContent.includes('providers:')) {
+                // 如果providers是其他形式，如providers: [...]
+                modifiedContent = modifiedContent.replace(/(providers\s*:\s*[[{][\s\S]*?[\]}][\s\n\r]*[,}])/, // 匹配providers: [...] 或 providers: {...} 整个表达式
+                (match) => {
+                    if (match.includes('importProvidersFrom') && match.includes('TranslateModule')) {
+                        // 如果已经包含了TranslateModule配置，跳过
+                        return match;
+                    }
+                    else {
+                        // 如果没有importProvidersFrom，添加TranslateModule
+                        const trimmedMatch = match.trim();
+                        if (trimmedMatch.endsWith(']')) {
+                            // 是数组形式
+                            return match.replace(/(\[[\s\S]*)/, (arrayPart) => {
+                                if (arrayPart.includes('importProvidersFrom(TranslateModule')) {
+                                    return arrayPart;
+                                }
+                                return arrayPart.replace(/(\[)/, '[\n    importProvidersFrom(TranslateModule.forRoot({\n      loader: {\n        provide: TranslateLoader,\n        useFactory: HttpLoaderFactory,\n        deps: [HttpClient]\n      }\n    })),\n  ');
+                            });
+                        }
+                        else {
+                            // 是对象或其他形式，需要更复杂的处理
+                            return `providers: [
+    ...${match.replace(/providers\s*:\s*/, '').replace(/[,{]/, '').trim()},
+    importProvidersFrom(TranslateModule.forRoot({
+      loader: {
+        provide: TranslateLoader,
+        useFactory: HttpLoaderFactory,
+        deps: [HttpClient]
+      }
+    }))
+  ],
+`;
+                        }
+                    }
+                });
+            }
+            else {
+                // 如果没有providers配置，需要添加
+                if (modifiedContent.includes('export const appConfig:') || modifiedContent.includes('AppConfig')) {
+                    if (!modifiedContent.includes('providers:')) {
+                        modifiedContent = modifiedContent.replace(/(export const appConfig:\s*ApplicationConfig\s*=\s*{)/, (match) => {
+                            return match + `
+  providers: [
+    importProvidersFrom(TranslateModule.forRoot({
+      loader: {
+        provide: TranslateLoader,
+        useFactory: HttpLoaderFactory,
+        deps: [HttpClient]
+      }
+    }))
+  ],
+`;
+                        });
+                        // 如果上面的替换没有成功，尝试其他可能的模式
+                        if (modifiedContent === content) {
+                            modifiedContent = modifiedContent.replace(/(appConfig\s*:\s*ApplicationConfig\s*=\s*{)/, (match) => {
+                                return match + `
+  providers: [
+    importProvidersFrom(TranslateModule.forRoot({
+      loader: {
+        provide: TranslateLoader,
+        useFactory: HttpLoaderFactory,
+        deps: [HttpClient]
+      }
+    }))
+  ],
+`;
+                            });
+                        }
+                    }
+                }
+            }
+            content = modifiedContent;
+            writeFile(appConfigPath, content);
+            (0, logger_1.info)('modified app.config.ts for ngx-translate', { file: appConfigPath });
+        }
+        else {
+            (0, logger_1.warn)('ngx-translate not configured in app.config.ts', { suggest: 'add TranslateModule to providers' });
+        }
+    }
+    else {
+        (0, logger_1.info)('ngx-translate already configured in app.config.ts', { file: appConfigPath });
+    }
+}
+function modifyAppModuleFile(appModulePath, mode) {
+    let content = readFile(appModulePath);
+    // 检查是否已导入 TranslateModule
+    if (!content.includes('@ngx-translate/core')) {
+        if (mode === 'fix') {
+            // 在文件开头添加导入
+            if (!content.includes('@ngx-translate/core')) {
+                // 确保安装了 http-loader 包
+                if (mode === 'fix') {
+                    const { spawnSync } = require('child_process');
+                    spawnSync('npm', ['install', '@ngx-translate/http-loader'], { stdio: 'inherit' });
+                }
+                content = content.replace(/(import\s+\{[^\}]*\}\s+from\s+['"][^'"]*app\/[^'"]*['"];)/, `$1
+import { TranslateModule, TranslateLoader } from '@ngx-translate/core';
+import { TranslateHttpLoader } from '@ngx-translate/http-loader';
+import { HttpClient, HttpClientModule } from '@angular/common/http';\n`);
+            }
+            // 添加 HttpClient 到 imports（如果还没有）
+            if (!content.includes('HttpClientModule')) {
+                if (content.includes('imports: [')) {
+                    content = content.replace(/(imports:\s*\[)/, 'imports: [\n    HttpClientModule,');
+                }
+            }
+            // 添加 TranslateModule 到 imports
+            if (content.includes('imports: [')) {
+                content = content.replace(/(imports:\s*\[)/, 'imports: [\n    TranslateModule.forRoot({\n      loader: {\n        provide: TranslateLoader,\n        useFactory: HttpLoaderFactory,\n        deps: [HttpClient]\n      }\n    }),');
+            }
+            // 添加 HttpLoaderFactory 函数
+            if (!content.includes('HttpLoaderFactory')) {
+                content += `
+
+export function HttpLoaderFactory(http: HttpClient) {
+  return new TranslateHttpLoader(http);
+}
+`;
+            }
+            writeFile(appModulePath, content);
+            (0, logger_1.info)('modified app.module.ts for ngx-translate', { file: appModulePath });
+        }
+        else {
+            (0, logger_1.warn)('ngx-translate not configured in app.module.ts', { suggest: 'add TranslateModule to imports' });
+        }
+    }
+    else {
+        (0, logger_1.info)('ngx-translate already configured in app.module.ts', { file: appModulePath });
+    }
+}
+function injectNgxTranslate(dictDir, mode) {
+    // 检查并安装 ngx-translate 包
+    checkAndInstallNgxTranslate(mode);
+    // 在 app/core 下创建新的 i18nService
+    createNgxTranslateService(dictDir, mode);
+    // 修改 app.module.ts 注入 TranslateModule
+    modifyAppModule(mode);
+}
+exports.injectNgxTranslate = injectNgxTranslate;
 function ensureAngularFiles(dictDir, mode) {
     const svcPath = path.join(process.cwd(), 'src/app/i18n/index.ts');
     const pipePath = path.join(process.cwd(), 'src/app/i18n/i18n.pipe.ts');
+    const adapterPath = path.join(process.cwd(), 'src/app/i18n/i18n-adapter.ts');
     const hasSvc = fs.existsSync(svcPath);
     const hasPipe = fs.existsSync(pipePath);
+    const hasAdapter = fs.existsSync(adapterPath);
+    // 创建国际化适配器服务
+    if (!hasAdapter && mode === 'fix') {
+        const adapter = `import { Injectable, signal, computed } from '@angular/core';
+import { en } from './en';
+import { zh } from './zh';
+
+export type ZH = typeof zh;
+
+@Injectable({ providedIn: 'root' })
+export class I18nAdapterService {
+  private langSignal = signal<'zh' | 'en'>('zh');
+  private cacheSignal = signal<any>(null);
+  
+  // 响应式语言状态
+  lang = this.langSignal.asReadonly();
+  
+  // 响应式词条包
+  locale = computed(() => {
+    const currentLang = this.langSignal();
+    const cachedLang = localStorage.getItem('i18n-lang');
+    
+    if (cachedLang && ['zh', 'en'].includes(cachedLang)) {
+      this.langSignal.set(cachedLang as 'zh' | 'en');
+    }
+    
+    const result = currentLang === 'en' ? en : zh;
+    this.cacheSignal.set(result);
+    return result;
+  });
+  
+  constructor() {
+    // 初始化语言
+    const cachedLang = localStorage.getItem('i18n-lang');
+    if (cachedLang && ['zh', 'en'].includes(cachedLang)) {
+      this.langSignal.set(cachedLang as 'zh' | 'en');
+    }
+  }
+  
+  /**
+   * 获取当前语言的词条包对象 (兼容旧模式)
+   */
+  getLocale(): typeof zh {
+    const currentLang = this.langSignal();
+    return currentLang === 'en' ? en as any : zh;
+  }
+  
+  /**
+   * 获取词条 (新模式)
+   * @param key 词条键名，如 'app.title'
+   * @param params 参数对象，如 { name: '张三', count: 5 }
+   */
+  get(key: string, params?: Record<string, unknown>): string {
+    const pack: any = this.getLocale();
+    const val = key.split('.').reduce((o, k) => (o ? o[k] : undefined), pack);
+    let s = typeof val === 'string' ? val : '';
+    
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        s = s.replace(new RegExp('\\{' + k + '\\}', 'g'), String(v));
+      }
+    }
+    
+    return s;
+  }
+  
+  /**
+   * 设置语言
+   * @param code 语言代码 'zh' | 'en'
+   */
+  setLang(code: 'en' | 'zh'): void {
+    this.langSignal.set(code);
+    localStorage.setItem('i18n-lang', code);
+    // 注意：在实际应用中，我们可能需要触发更新而不是刷新页面
+    // 但在适配器中，为了兼容旧代码，我们保留刷新机制
+    // window.location.reload();
+  }
+  
+  /**
+   * 检查词条是否存在
+   * @param key 词条键名
+   */
+  hasKey(key: string): boolean {
+    const pack: any = this.getLocale();
+    const val = key.split('.').reduce((o, k) => (o ? o[k] : undefined), pack);
+    return typeof val === 'string';
+  }
+  
+  /**
+   * 安全获取词条，如果不存在则返回默认值
+   * @param key 词条键名
+   * @param defaultValue 默认值
+   * @param params 参数对象
+   */
+  getSafe(key: string, defaultValue: string = '', params?: Record<string, unknown>): string {
+    if (this.hasKey(key)) {
+      return this.get(key, params);
+    }
+    return defaultValue;
+  }
+  
+  /**
+   * 批量获取词条对象
+   * @param keys 词条键名数组
+   */
+  getMultiple(keys: string[]): Record<string, string> {
+    const result: Record<string, string> = {};
+    for (const key of keys) {
+      result[key] = this.get(key);
+    }
+    return result;
+  }
+  
+  /**
+   * 获取当前语言代码
+   */
+  getCurrentLang(): 'zh' | 'en' {
+    return this.langSignal();
+  }
+  
+  /**
+   * 为旧模式提供兼容性访问器
+   * 直接返回词条包，允许旧代码继续使用 this.dict.app.title 的形式
+   */
+  get dict(): typeof zh {
+    return this.getLocale();
+  }
+  
+  /**
+   * 为旧模式提供兼容性访问器
+   * 直接返回词条包，允许旧代码继续使用 this.i18n.app.title 的形式
+   */
+  get i18n(): typeof zh {
+    return this.getLocale();
+  }
+}`;
+        fs.mkdirSync(path.dirname(adapterPath), { recursive: true });
+        fs.writeFileSync(adapterPath, adapter, 'utf8');
+        (0, logger_1.info)('created adapter service', { file: adapterPath });
+    }
+    else if (!hasAdapter)
+        (0, logger_1.warn)('missing adapter service', { suggest: 'create src/app/i18n/i18n-adapter.ts' });
+    // 创建国际化服务
     if (!hasSvc && mode === 'fix') {
-        const svc = `import { Injectable } from '@angular/core'
+        const svc = `import { Injectable, signal } from '@angular/core'
 import { en } from './en'
 import { zh } from './zh'
+
 @Injectable({ providedIn: 'root' })
 export class I18nLocaleService {
-  lang: 'zh'|'en' = 'zh'
-  getLocale() { const cached = localStorage.getItem('i18n-lang'); if (cached) this.lang = cached as any; return this.lang === 'en' ? en as any : zh }
-  get(key: string, params?: Record<string, unknown>) { const pack: any = this.getLocale(); const val = key.split('.').reduce((o,k)=>o?o[k]:undefined, pack); let s = typeof val === 'string' ? val : ''; if (params) { for (const [k,v] of Object.entries(params)) s = s.replace(new RegExp('\\\\{'+k+'\\\\}','g'), String(v)) } return s }
-  setLang(code: 'en'|'zh') { this.lang = code; localStorage.setItem('i18n-lang', code); }
+  private langSignal = signal<'zh' | 'en'>('zh');
+  
+  // 响应式语言状态
+  lang = this.langSignal.asReadonly();
+  
+  constructor() {
+    // 从localStorage读取缓存
+    const cachedLang = localStorage.getItem('i18n-lang');
+    if (cachedLang && ['zh', 'en'].includes(cachedLang)) {
+      this.langSignal.set(cachedLang as any);
+    }
+  }
+  
+  getLocale() { 
+    const cached = localStorage.getItem('i18n-lang'); 
+    if (cached && ['zh', 'en'].includes(cached)) this.langSignal.set(cached as any); 
+    const currentLang = this.langSignal();
+    return currentLang === 'en' ? en as any : zh 
+  }
+  
+  get(key: string, params?: Record<string, unknown>) { 
+    const pack: any = this.getLocale(); 
+    const val = key.split('.').reduce((o,k)=>o?o[k]:undefined, pack); 
+    let s = typeof val === 'string' ? val : ''; 
+    if (params) { 
+      for (const [k,v] of Object.entries(params)) 
+        s = s.replace(new RegExp('\\\\{'+k+'\\\\}','g'), String(v)) 
+    } 
+    return s 
+  }
+  
+  setLang(code: 'en'|'zh') { 
+    this.langSignal.set(code); 
+    localStorage.setItem('i18n-lang', code); 
+    // 不再刷新页面，使用信号实现响应式更新
+  }
 }`;
         fs.mkdirSync(path.dirname(svcPath), { recursive: true });
         fs.writeFileSync(svcPath, svc, 'utf8');
@@ -187,8 +651,12 @@ export class I18nLocaleService {
     }
     else if (!hasSvc)
         (0, logger_1.warn)('missing service', { suggest: 'create src/app/i18n/index.ts' });
+    // 创建国际化管道
     if (!hasPipe && mode === 'fix') {
-        const pipe = `import { Pipe, PipeTransform } from '@angular/core'\nimport { I18nLocaleService } from './index'\n@Pipe({ name: 'i18n', standalone: true })\nexport class I18nPipe implements PipeTransform { constructor(private locale: I18nLocaleService){} transform(key: string, params?: Record<string, unknown>) { return this.locale.get(key, params) } }`;
+        const pipe = `import { Pipe, PipeTransform } from '@angular/core'
+import { I18nLocaleService } from './index'
+@Pipe({ name: 'i18n', standalone: true })
+export class I18nPipe implements PipeTransform { constructor(private locale: I18nLocaleService){} transform(key: string, params?: Record<string, unknown>) { return this.locale.get(key, params) } }`;
         fs.mkdirSync(path.dirname(pipePath), { recursive: true });
         fs.writeFileSync(pipePath, pipe, 'utf8');
         (0, logger_1.info)('created pipe', { file: pipePath });
@@ -207,11 +675,13 @@ export class I18nLocaleService {
                         return fullMatch; // 已存在，无需添加
                     }
                     // 在providers数组开始后添加服务
-                    return `providers: [${existingProviders ? existingProviders + ',' : ''}\n    I18nLocaleService]`;
+                    return `providers: [${existingProviders ? existingProviders + ',' : ''}
+    I18nLocaleService]`;
                 });
                 // 如果没有import I18nLocaleService，则添加import
                 if (!/I18nLocaleService/.test(configContent)) {
-                    configContent = configContent.replace(/(import\s+\{[^\}]*\}\s+from\s+['"][^'"]*app\/i18n['"];)/, `import { I18nLocaleService } from './i18n';\n$&`);
+                    configContent = configContent.replace(/(import\s+\{[^\}]*\}\s+from\s+['"][^'"]*app\/i18n['"];)/, `import { I18nLocaleService } from './i18n';
+$&`);
                 }
                 writeFile(appConfigPath, configContent);
                 (0, logger_1.info)('added service to app config', { file: appConfigPath });
@@ -233,11 +703,12 @@ export class I18nLocaleService {
                     const lastImportIndex = s.lastIndexOf('import ');
                     const eol = s.indexOf('\n', lastImportIndex);
                     if (eol >= 0) {
-                        s = s.slice(0, eol + 1) + `import { I18nPipe } from './i18n/i18n.pipe'\n` + s.slice(eol + 1);
+                        s = s.slice(0, eol + 1) + `import { I18nPipe } from './i18n/i18n.pipe'
+` + s.slice(eol + 1);
                     }
                 }
                 // 在imports数组中添加I18nPipe
-                s = s.replace(/imports:\s*\[([^{\]]*)\]/, (_m, inside) => {
+                s = s.replace(/imports:\s*\[([^\{\]]*)\]/, (_m, inside) => {
                     const imports = inside.split(',').map((imp) => imp.trim()).filter((imp) => imp);
                     if (!imports.includes('I18nPipe')) {
                         return `imports: [${inside} , I18nPipe]`;
@@ -414,12 +885,12 @@ function valueOf(map, key) {
 function main() {
     const args = process.argv.slice(2); // 读取参数
     let mode = 'replace';
-    const usage = `Usage: i18n-refactor [init | --mode=replace|restore|bootstrap|delete|init|dict-process|ensure-i18n] [--help] [--version]`;
+    const usage = `Usage: i18n-refactor [init | --mode=replace|restore|bootstrap|delete|init|dict-process|inject-i18n] [--help] [--version]`;
     const version = '0.2.0';
     for (const a of args) { // 解析参数
         if (a === 'init')
             mode = 'init';
-        const r = a.match(/^--mode=(replace|restore|bootstrap|delete|init|dict-process|ensure-i18n)$/);
+        const r = a.match(/^--mode=(replace|restore|bootstrap|delete|init|dict-process|inject-i18n)$/);
         if (r)
             mode = r[1];
         if (a === '--dry-run')
@@ -454,9 +925,9 @@ function main() {
         processDictFiles(config_1.config.dictDir || 'src/app/i18n', (config_1.config.jsonOutDir || 'i18n-refactor/out'), (config_1.config.languages || ['zh', 'en']), (config_1.config.jsonArrayMode || 'nested'));
         return;
     }
-    // 确保i18n服务和管道已正确配置
-    if (mode === 'ensure-i18n') {
-        ensureAngularFiles(config_1.config.dictDir || 'src/app/i18n', (config_1.config.ensureAngular || 'fix'));
+    // 注入ngx-translate国际化功能
+    if (mode === 'inject-i18n') {
+        injectNgxTranslate(config_1.config.dictDir || 'src/app/i18n', (config_1.config.ensureAngular || 'fix'));
         return;
     }
     const dir = config_1.config.dir || process.cwd();
