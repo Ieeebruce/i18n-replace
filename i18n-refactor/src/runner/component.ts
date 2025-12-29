@@ -513,39 +513,77 @@ function injectService(code: string, filePath?: string): string {
   for (const param of serviceParams) {
     // 重命名参数
     replacements.push({ start: param.pos, end: param.end, text: param.newName })
-    
-    // 重命名整个文件中对旧参数名的引用，但要非常精确，避免误替换
-    // 只替换 this.oldName 这种模式
-    let tempS = s
-    // 替换 this.oldName 模式
-    const thisRegex = new RegExp(`this\\.${param.oldName}\\.`, 'g')
-    tempS = tempS.replace(thisRegex, `this.${param.newName}.`)
-    
-    // 替换 this.oldName( 模式（方法调用）
-    const callRegex = new RegExp(`this\\.${param.oldName}\\(`, 'g')
-    tempS = tempS.replace(callRegex, `this.${param.newName}(`)
-    
-    // 替换 this.oldName, 模式（属性访问后的逗号）
-    const commaRegex = new RegExp(`this\\.${param.oldName},`, 'g')
-    tempS = tempS.replace(commaRegex, `this.${param.newName},`)
-    
-    // 替换 this.oldName) 模式（属性访问后的右括号）
-    const parenRegex = new RegExp(`this\\.${param.oldName}\\)`, 'g')
-    tempS = tempS.replace(parenRegex, `this.${param.newName})`)
-    
-    // 替换 this.oldName; 模式（属性访问后的分号）
-    const semicolonRegex = new RegExp(`this\\.${param.oldName};`, 'g')
-    tempS = tempS.replace(semicolonRegex, `this.${param.newName};`)
-    
-    // 替换 this.oldName<空格> 模式
-    const spaceRegex = new RegExp(`this\\.${param.oldName}(?=\\s)`, 'g')
-    tempS = tempS.replace(spaceRegex, `this.${param.newName}`)
-    
-    if (tempS !== s) {
-      s = tempS
-    }
   }
-  
+    
+  // 重命名整个文件中对旧参数名的引用，但要非常精确，避免误替换
+  // 即使没有参数需要重命名，也要处理可能存在的旧引用
+  let tempS = s
+    
+  // 获取当前配置的正确服务变量名
+  const correctVarName = config.serviceVariableName
+    
+  // 遍历所有可能的旧服务变量名（根据配置的旧名称）
+  // 如果没有参数重命名，但文件中可能有旧的引用，也需要处理
+  for (const param of serviceParams) {
+    // 替换 this.旧参数名. 模式 (例如: this.locale.getLocale())
+    // 使用负向先行断言来确保前面不是字母、数字或下划线，避免匹配如 'locale' 中的 'loc'
+    const thisDotRegex = new RegExp(`(?<!\\w)\\bthis\\.${param.oldName}\\.(?!\\w)`, 'g')
+    tempS = tempS.replace(thisDotRegex, `this.${param.newName}.`)
+          
+    // 替换 this.旧参数名( 模式（方法调用）
+    const thisCallRegex = new RegExp(`(?<!\\w)\\bthis\\.${param.oldName}\\(`, 'g')
+    tempS = tempS.replace(thisCallRegex, `this.${param.newName}(`)
+          
+    // 替换 this.旧参数名) 模式（属性访问后的右括号）
+    const thisEndParenRegex = new RegExp(`(?<!\\w)\\bthis\\.${param.oldName}\\)`, 'g')
+    tempS = tempS.replace(thisEndParenRegex, `this.${param.newName})`)
+          
+    // 替换 this.旧参数名; 模式（属性访问后的分号）
+    const thisSemicolonRegex = new RegExp(`(?<!\\w)\\bthis\\.${param.oldName};`, 'g')
+    tempS = tempS.replace(thisSemicolonRegex, `this.${param.newName};`)
+          
+    // 替换 this.旧参数名<空格> 模式
+    const thisSpaceRegex = new RegExp(`(?<!\\w)\\bthis\\.${param.oldName}(?=\\s)`, 'g')
+    tempS = tempS.replace(thisSpaceRegex, `this.${param.newName}`)
+          
+    // 替换 this.旧参数名<换行> 模式
+    const thisNewlineRegex = new RegExp(`(?<!\\w)\\bthis\\.${param.oldName}(?=\\n)`, 'g')
+    tempS = tempS.replace(thisNewlineRegex, `this.${param.newName}`)
+          
+    // 替换 this.旧参数名 后跟任何非单词字符的情况（例如 this.locale.get）
+    const thisAnyCharRegex = new RegExp(`(?<!\\w)\\bthis\\.${param.oldName}\\b(?!\\w)`, 'g')
+    tempS = tempS.replace(thisAnyCharRegex, `this.${param.newName}`)
+  }
+    
+  // 如果当前文件中存在旧的服务变量名引用，也需要替换
+  // 假设默认的旧服务变量名可能是 'locale' 或其他常见名称
+  // 从配置中获取可能的旧名称，如果没有特殊配置，使用默认的可能旧名称
+  if (correctVarName !== 'locale') { // 如果当前配置的变量名不是 'locale'
+    const oldServiceName = 'locale' // 默认的旧服务变量名
+    // 只替换完整单词形式的 this.locale，避免在方法名中错误替换
+    const thisDotRegex = new RegExp(`(?<!\\w)\\bthis\\.${oldServiceName}\\.(?!\\w)`, 'g')
+    tempS = tempS.replace(thisDotRegex, `this.${correctVarName}.`)
+          
+    const thisCallRegex = new RegExp(`(?<!\\w)\\bthis\\.${oldServiceName}\\(`, 'g')
+    tempS = tempS.replace(thisCallRegex, `this.${correctVarName}(`)
+          
+    const thisEndParenRegex = new RegExp(`(?<!\\w)\\bthis\\.${oldServiceName}\\)`, 'g')
+    tempS = tempS.replace(thisEndParenRegex, `this.${correctVarName})`)
+          
+    const thisSemicolonRegex = new RegExp(`(?<!\\w)\\bthis\\.${oldServiceName};`, 'g')
+    tempS = tempS.replace(thisSemicolonRegex, `this.${correctVarName};`)
+          
+    const thisSpaceRegex = new RegExp(`(?<!\\w)\\bthis\\.${oldServiceName}(?=\\s)`, 'g')
+    tempS = tempS.replace(thisSpaceRegex, `this.${correctVarName}`)
+          
+    const thisNewlineRegex = new RegExp(`(?<!\\w)\\bthis\\.${oldServiceName}(?=\\n)`, 'g')
+    tempS = tempS.replace(thisNewlineRegex, `this.${correctVarName}`)
+  }
+    
+  if (tempS !== s) {
+    s = tempS
+  }
+    
   // 先处理替换（参数名重命名）
   replacements.sort((a, b) => b.start - a.start)
   for (const rep of replacements) {

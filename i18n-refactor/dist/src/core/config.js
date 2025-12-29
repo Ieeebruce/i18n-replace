@@ -34,7 +34,6 @@ const defaults = {
     languages: ['zh', 'en'],
     jsonOutDir: 'i18n-refactor/out',
     jsonArrayMode: 'nested',
-    ensureAngular: 'fix',
     dir: process.cwd(),
     dryRun: false,
     logLevel: 'info',

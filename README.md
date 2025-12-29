@@ -62,7 +62,6 @@
   "languages": ["zh", "en"],
   "jsonOutDir": "i18n-refactor/out",
   "jsonArrayMode": "nested",
-  "ensureAngular": "fix",
   "dir": "src",
   "dryRun": false,
   "logLevel": "info",
@@ -78,9 +77,6 @@
    - `jsonArrayMode`: 数组处理模式。
      - `"nested"`: 保持数组结构（默认）。
      - `"flat"`: 展开为对象（如 `list.0: "Item A"`）。
-   - `ensureAngular`: Angular 环境修复策略。
-     - `"fix"`: 自动创建缺失文件并导入（默认）。
-     - `"report"`: 仅报告缺失。
   - 运行：
     - `dir`: 要处理的目录（如 `src`）。
     - `dryRun`: 是否干运行（不落盘）。

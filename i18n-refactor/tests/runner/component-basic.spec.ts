@@ -101,6 +101,6 @@ constructor(private locale: I18nLocaleService) {
   const out = processComponent(ts, html);
   console.log(out.tsOut);
   console.log(out.htmlOut);
-  expect(out.tsOut).toContain(`this.locale.get('app.title')`);
+  expect(out.tsOut).toContain(`this.i18n.get('app.title')`);
   expect(out.tsOut).toContain(`title: any;`);
 });

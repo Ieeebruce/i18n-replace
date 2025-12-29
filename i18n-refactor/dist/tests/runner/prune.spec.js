@@ -14,6 +14,6 @@ test('prune getLocale assignments and any declarations', () => {
      }`;
     const html = `<div>{{ i18n.app.title }}</div>`;
     const out = (0, component_1.processComponent)(ts, html);
-    expect(out.tsOut).toContain(`this.locale.get('app.common.app.title')`);
+    expect(out.tsOut).toContain(`this.i18n.get('app.common.app.title')`);
     expect(out.htmlOut).toContain(`{{ 'app.common.app.title' | i18n }}`);
 });

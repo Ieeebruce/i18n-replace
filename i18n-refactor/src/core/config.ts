@@ -9,7 +9,6 @@ export type Config = { // 配置对象类型，定义脚本解析与渲染所需
   languages?: string[]
   jsonOutDir?: string
   jsonArrayMode?: 'nested' | 'flat'
-  ensureAngular?: 'report' | 'fix'
   dir?: string
   dryRun?: boolean
   logLevel?: 'debug' | 'info' | 'warn' | 'error'
@@ -24,7 +23,6 @@ const defaults: Config = { // 默认配置常量，供各模块使用
   languages: ['zh','en'],
   jsonOutDir: 'i18n-refactor/out',
   jsonArrayMode: 'nested',
-  ensureAngular: 'fix',
   dir: process.cwd(),
   dryRun: false,
   logLevel: 'info',

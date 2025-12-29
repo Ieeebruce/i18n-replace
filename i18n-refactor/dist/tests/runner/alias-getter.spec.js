@@ -30,14 +30,14 @@ describe('AliasGetterComponent', () => {
         const { tsOut } = (0, component_1.processComponent)(code, '', 'src/app/test.ts', externalAliases);
         console.log(tsOut);
         // Check replacement of this.L
-        expect(tsOut).toContain("this.locale.get('app.home.welcome')");
+        expect(tsOut).toContain("this.i18n.get('app.home.welcome')");
         // Check replacement of replace chain
-        // Should be: this.locale.get('app.templates.info', {name:'李四', count:'2'})
-        expect(tsOut).toContain("this.locale.get('app.templates.info', {name:'李四', count:'2'})");
+        // Should be: this.i18n.get('app.templates.info', {name:'李四', count:'2'})
+        expect(tsOut).toContain("this.i18n.get('app.templates.info', {name:'李四', count:'2'})");
         // Check removal of assignment
         // this.i18n = this.exampleService.i18n; should be removed
         expect(tsOut).not.toContain("this.i18n = this.exampleService.i18n");
         // Check replacement of this.i18n.title
-        expect(tsOut).toContain("this.locale.get('app.title')");
+        expect(tsOut).toContain("this.i18n.get('app.title')");
     });
 });

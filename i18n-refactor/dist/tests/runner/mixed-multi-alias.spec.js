@@ -18,12 +18,12 @@ test('multiple aliases i18n/dict/L in one component', () => {
     // 调用处理函数
     const out = (0, component_1.processComponent)(ts, html);
     // 验证 TS 输出，i18n 是 getLocale()，所以 i18n.app.title -> app.title
-    expect(out.tsOut).toContain(`this.locale.get('app.title')`);
+    expect(out.tsOut).toContain(`this.i18n.get('app.title')`);
     // 验证 TS 输出，dict 是 {...app, ...common}，common 在后覆盖。common.desc 在 common 根下，所以是 common.common.desc
     // 注意：这里的 key 应该是 common.common.desc 还是 common.desc 取决于 dict-reader 的解析和 alias 的 root 集合
-    expect(out.tsOut).toContain(`this.locale.get('common.common.desc')`);
+    expect(out.tsOut).toContain(`this.i18n.get('common.common.desc')`);
     // 验证 TS 输出，L 是 getLocale()，所以 L.app.footer -> app.footer
-    expect(out.tsOut).toContain(`this.locale.get('app.footer')`);
+    expect(out.tsOut).toContain(`this.i18n.get('app.footer')`);
     // 验证 HTML 输出
     expect(out.htmlOut).toContain(`{{ 'app.title' | i18n }}`);
     // 验证 HTML 输出
@@ -39,11 +39,11 @@ test('multiple aliases i18n/dict/L in one component', () => {
     // 调用处理函数
     const out = (0, component_1.processComponent)(ts, html);
     // 验证 TS 输出
-    expect(out.tsOut).toContain(`this.locale.get('app.title')`);
+    expect(out.tsOut).toContain(`this.i18n.get('app.title')`);
     // 验证 TS 输出
-    expect(out.tsOut).toContain(`this.locale.get('common.common.desc')`);
+    expect(out.tsOut).toContain(`this.i18n.get('common.common.desc')`);
     // 验证 TS 输出
-    expect(out.tsOut).toContain(`this.locale.get('app.footer')`);
+    expect(out.tsOut).toContain(`this.i18n.get('app.footer')`);
     // 验证 HTML 输出
     expect(out.htmlOut).toContain(`{{ 'app.title' | i18n }}`);
     // 验证 HTML 输出
@@ -110,18 +110,18 @@ export class MergeAssignComponent {
     // 调用处理函数
     const out = (0, component_1.processComponent)(ts, html);
     // 验证 TS 输出
-    expect(out.tsOut).toContain(`this.locale.get('home.welcome')`);
+    expect(out.tsOut).toContain(`this.i18n.get('home.welcome')`);
     // 验证 TS 输出
-    expect(out.tsOut).toContain(`this.locale.get('app.onlyApp')`);
+    expect(out.tsOut).toContain(`this.i18n.get('app.onlyApp')`);
     // 验证 TS 输出
-    expect(out.tsOut).toContain(`this.locale.get('app.description')`);
+    expect(out.tsOut).toContain(`this.i18n.get('app.description')`);
     // 验证 TS 输出
-    expect(out.tsOut).toContain(`this.locale.get('app.header')`);
+    expect(out.tsOut).toContain(`this.i18n.get('app.header')`);
     // 验证 TS 输出
-    expect(out.tsOut).toContain(`this.locale.get('app.footer')`);
+    expect(out.tsOut).toContain(`this.i18n.get('app.footer')`);
     // 验证 TS 输出
-    expect(out.tsOut).toContain(`this.locale.get('common.onlyCommon')`);
+    expect(out.tsOut).toContain(`this.i18n.get('common.onlyCommon')`);
     // 验证 TS 输出，忽略空格差异
     // ignore character escaping differences
-    expect(out.tsOut.replace(/\s/g, '')).toContain(`this.locale.get('app.user.greetTpl', {name:'李雷'})`.replace(/\s/g, ''));
+    expect(out.tsOut.replace(/\s/g, '')).toContain(`this.i18n.get('app.user.greetTpl', {name:'李雷'})`.replace(/\s/g, ''));
 });

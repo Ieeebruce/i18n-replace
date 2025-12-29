@@ -13,5 +13,5 @@ test('do not replace non-i18n array methods', () => {
      } }`;
     const out = (0, component_1.processComponent)(ts, '');
     expect(out.tsOut).toContain('const sum = this.items.reduce((m, it) => m + it, 0);');
-    expect(out.tsOut).toContain(`this.locale.get('app.title')`);
+    expect(out.tsOut).toContain(`this.i18n.get('app.title')`);
 });
