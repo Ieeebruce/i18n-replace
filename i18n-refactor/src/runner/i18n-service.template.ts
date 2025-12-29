@@ -8,8 +8,8 @@ import { TranslateService } from '@ngx-translate/core';
 export class I18nLocaleService {
   constructor(private translate: TranslateService) {}
   
-  getLocale() {
-    return this.translate;
+  get(key: string, params?: any) {
+    return this.translate.get(key, params);
   }
 }
 `;
