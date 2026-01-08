@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const component_1 = require("../../src/runner/component");
+const component_1 = require("../../src/processor/component");
 test('do not replace non-i18n array methods', () => {
     const ts = `class C { 
   items = [1,2,3]; 

@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>I18n Refactor Tool</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 1400px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { margin-top: 0; }
+        .controls { margin-bottom: 20px; padding: 10px; background: #eee; border-radius: 4px; display: flex; gap: 10px; align-items: center; }
+        button { padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .file-list { margin-bottom: 20px; border: 1px solid #ddd; border-radius: 4px; overflow-y: auto; height: calc(100vh - 250px); }
+        .file-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .file-item:hover { background: #f0f8ff; }
+        .file-item.selected { background: #e6f7ff; border-left: 4px solid #1890ff; }
+        .file-item:last-child { border-bottom: none; }
+        .diff-container { margin-top: 20px; height: calc(100vh - 250px); overflow: auto; border: 1px solid #ddd; border-radius: 4px; }
+        .status { margin-left: auto; font-size: 14px; color: #666; }
+        .loading { color: #1890ff; font-weight: bold; }
+        .badge { padding: 2px 6px; border-radius: 4px; font-size: 12px; margin-left: 8px; }
+        .badge-ts { background: #007bff; color: white; }
+        .badge-html { background: #e06c75; color: white; }
+        
+        /* Custom diff styles */
+        .diff-content { font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.5; }
+        .diff-section { margin-bottom: 20px; }
+        .diff-header { background: #f0f0f0; padding: 8px 12px; font-weight: bold; border-bottom: 1px solid #ddd; }
+        .diff-line { display: flex; align-items: center; padding: 2px 8px; border-bottom: 1px solid #f0f0f0; }
+        .diff-line-number { width: 50px; text-align: right; padding-right: 12px; color: #999; user-select: none; }
+        .diff-line-content { flex: 1; white-space: pre-wrap; word-break: break-word; }
+        .diff-added { background: #d4edda; color: #155724; }
+        .diff-deleted { background: #f8d7da; color: #721c24; text-decoration: line-through; }
+        .diff-changed { background: #fff3cd; color: #856404; }
+        .diff-unchanged { background: #ffffff; color: #333333; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>I18n Refactor Visualization</h1>
+        <div class="controls">
+            <button id="scanBtn">Scan Project</button>
+            <button id="applyBtn" disabled>Apply All Changes</button>
+            <span id="statusText" class="status">Ready</span>
+        </div>
+
+        <div style="display: flex; gap: 20px;">
+            <div style="flex: 0 0 300px; display: flex; flex-direction: column;">
+                <h3>Files (<span id="fileCount">0</span>)</h3>
+                <div id="fileList" class="file-list">
+                    <div style="padding: 10px; color: #999;">Click 'Scan' to start</div>
+                </div>
+            </div>
+            <div style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3>Diff View: <span id="currentFileLabel" style="font-weight: normal; color: #666;"></span></h3>
+                    <div id="viewModeControls">
+                        <label><input type="radio" name="viewMode" value="side-by-side" checked> Side by Side</label>
+                        <label><input type="radio" name="viewMode" value="line-by-line"> Line by Line</label>
+                    </div>
+                </div>
+                <div id="diffOutput" class="diff-container">
+                    <div style="padding: 20px; text-align: center; color: #999;">Select a file to view changes</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Simple diff algorithm implementation
+        function generateDiff(before, after, fileName, viewMode) {
+            const beforeLines = before.split('\n');
+            const afterLines = after.split('\n');
+            let result = `<div class="diff-section"><div class="diff-header">${fileName}</div>`;
+            
+            if (viewMode === 'side-by-side') {
+                // Side by Side view
+                result += `<div class="diff-content" style="display: flex;">
+                    <div style="flex: 1; padding-right: 10px; border-right: 1px solid #ddd;">
+                        <div style="background: #f0f0f0; padding: 4px 8px; font-weight: bold; text-align: center;">Before</div>`;
+                
+                let maxLines = Math.max(beforeLines.length, afterLines.length);
+                for (let i = 0; i < maxLines; i++) {
+                    const beforeLine = beforeLines[i] || '';
+                    const afterLine = afterLines[i] || '';
+                    const isChanged = beforeLine !== afterLine;
+                    
+                    result += `<div class="diff-line ${isChanged ? 'diff-deleted' : 'diff-unchanged'}">
+                        <span class="diff-line-number">${i+1}</span>
+                        <span class="diff-line-content">${escapeHtml(beforeLine)}</span>
+                    </div>`;
+                }
+                
+                result += `</div>
+                    <div style="flex: 1; padding-left: 10px;">
+                        <div style="background: #f0f0f0; padding: 4px 8px; font-weight: bold; text-align: center;">After</div>`;
+                
+                for (let i = 0; i < maxLines; i++) {
+                    const beforeLine = beforeLines[i] || '';
+                    const afterLine = afterLines[i] || '';
+                    const isChanged = beforeLine !== afterLine;
+                    
+                    result += `<div class="diff-line ${isChanged ? 'diff-added' : 'diff-unchanged'}">
+                        <span class="diff-line-number">${i+1}</span>
+                        <span class="diff-line-content">${escapeHtml(afterLine)}</span>
+                    </div>`;
+                }
+                
+                result += `</div>
+                </div>`;
+            } else {
+                // Line by Line view (original implementation)
+                result += `<div class="diff-content">`;
+                
+                let maxLines = Math.max(beforeLines.length, afterLines.length);
+                for (let i = 0; i < maxLines; i++) {
+                    const beforeLine = beforeLines[i] || '';
+                    const afterLine = afterLines[i] || '';
+                    
+                    if (beforeLine === afterLine) {
+                        // Unchanged line
+                        result += `<div class="diff-line diff-unchanged">
+                            <span class="diff-line-number">${i+1}</span>
+                            <span class="diff-line-content">${escapeHtml(beforeLine)}</span>
+                        </div>`;
+                    } else {
+                        // Changed line
+                        if (beforeLine !== '') {
+                            result += `<div class="diff-line diff-deleted">
+                                <span class="diff-line-number">${i+1}</span>
+                                <span class="diff-line-content">${escapeHtml(beforeLine)}</span>
+                            </div>`;
+                        }
+                        if (afterLine !== '') {
+                            result += `<div class="diff-line diff-added">
+                                <span class="diff-line-number">${i+1}</span>
+                                <span class="diff-line-content">${escapeHtml(afterLine)}</span>
+                            </div>`;
+                        }
+                    }
+                }
+                
+                result += '</div>';
+            }
+            
+            result += '</div>';
+            return result;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        let filesData = [];
+        let currentFileIndex = -1;
+
+        const scanBtn = document.getElementById('scanBtn');
+        const applyBtn = document.getElementById('applyBtn');
+        const statusText = document.getElementById('statusText');
+        const fileList = document.getElementById('fileList');
+        const diffOutput = document.getElementById('diffOutput');
+        const fileCount = document.getElementById('fileCount');
+        const currentFileLabel = document.getElementById('currentFileLabel');
+        const viewModeInputs = document.querySelectorAll('input[name="viewMode"]');
+
+        // View mode handling
+        let currentViewMode = 'side-by-side';
+        viewModeInputs.forEach(input => {
+            input.addEventListener('change', (e) => {
+                currentViewMode = e.target.value;
+                if (currentFileIndex >= 0) {
+                    renderDiff(filesData[currentFileIndex]);
+                }
+            });
+        });
+
+        scanBtn.addEventListener('click', async () => {
+            statusText.textContent = 'Scanning...';
+            statusText.classList.add('loading');
+            scanBtn.disabled = true;
+            fileList.innerHTML = '<div style="padding: 10px;">Scanning...</div>';
+            
+            try {
+                const res = await fetch('/api/scan');
+                const data = await res.json();
+                filesData = data.results.filter(f => f.changed);
+                fileCount.textContent = filesData.length;
+                renderFileList();
+                statusText.textContent = `Found ${filesData.length} files to change.`;
+                if (filesData.length > 0) {
+                    applyBtn.disabled = false;
+                    selectFile(0);
+                } else {
+                    applyBtn.disabled = true;
+                    diffOutput.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">No changes found.</div>';
+                }
+            } catch (e) {
+                statusText.textContent = 'Error: ' + e.message;
+                fileList.innerHTML = '<div style="padding: 10px; color: red;">Error scanning</div>';
+            } finally {
+                statusText.classList.remove('loading');
+                scanBtn.disabled = false;
+            }
+        });
+
+        applyBtn.addEventListener('click', async () => {
+            if (!confirm('Are you sure you want to apply changes to all ' + filesData.length + ' files?')) return;
+            
+            statusText.textContent = 'Applying changes...';
+            statusText.classList.add('loading');
+            applyBtn.disabled = true;
+            scanBtn.disabled = true;
+            
+            try {
+                const filesToApply = filesData.map(f => f.tsPath);
+                const res = await fetch('/api/apply', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ files: filesToApply })
+                });
+                const result = await res.json();
+                if (result.success) {
+                    statusText.textContent = `Successfully applied changes to ${result.count} files.`;
+                    fileList.innerHTML = '';
+                    diffOutput.innerHTML = '<div style="padding: 20px; text-align: center; color: green;">All changes applied successfully!</div>';
+                    fileCount.textContent = '0';
+                    filesData = [];
+                } else {
+                    throw new Error(result.error || 'Unknown error');
+                }
+            } catch (e) {
+                statusText.textContent = 'Error applying: ' + e.message;
+            } finally {
+                statusText.classList.remove('loading');
+                scanBtn.disabled = false;
+            }
+        });
+
+        function renderFileList() {
+            fileList.innerHTML = '';
+            filesData.forEach((file, index) => {
+                const div = document.createElement('div');
+                div.className = 'file-item';
+                const name = file.tsPath.split('/').pop();
+                
+                let badges = '';
+                if (file.tsBefore !== file.tsAfter) badges += '<span class="badge badge-ts">TS</span>';
+                if (file.htmlPath && file.htmlBefore !== file.htmlAfter) badges += '<span class="badge badge-html">HTML</span>';
+
+                div.innerHTML = `<span>${name}</span><div>${badges}</div>`;
+                div.onclick = () => selectFile(index);
+                fileList.appendChild(div);
+            });
+        }
+
+        function selectFile(index) {
+            if (currentFileIndex >= 0) {
+                const prev = fileList.children[currentFileIndex];
+                if (prev) prev.classList.remove('selected');
+            }
+            currentFileIndex = index;
+            const curr = fileList.children[currentFileIndex];
+            if (curr) curr.classList.add('selected');
+
+            const file = filesData[index];
+            currentFileLabel.textContent = file.tsPath;
+            renderDiff(file);
+        }
+
+        function renderDiff(file) {
+            let diffHtml = '';
+            
+            // TS Diff
+            if (file.tsBefore !== file.tsAfter) {
+                diffHtml += generateDiff(file.tsBefore, file.tsAfter, 'TypeScript', currentViewMode);
+            }
+
+            // HTML Diff
+            if (file.htmlPath && file.htmlBefore !== file.htmlAfter) {
+                diffHtml += generateDiff(file.htmlBefore, file.htmlAfter, 'HTML Template', currentViewMode);
+            }
+
+            diffOutput.innerHTML = diffHtml;
+        }
+    </script>
+</body>
+</html>

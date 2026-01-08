@@ -1,4 +1,4 @@
-import { processComponent } from '../../src/runner/component'
+import { processComponent } from '../../src/processor/component'
 import { setMockDict } from '../../src/util/dict-reader'
 
 beforeAll(() => {

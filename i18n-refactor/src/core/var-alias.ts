@@ -1,7 +1,7 @@
 import ts from 'typescript' // 引入 TypeScript AST 工具
+import { VarAlias, ExternalAliasMap } from '../types/var-alias' // 引入类型定义
 
-export type VarAlias = { name: string; prefix: string | null; roots: string[]; declNode?: ts.Node } // 变量别名信息：名称、前缀、根来源、定义节点
-export type ExternalAliasMap = Map<string, VarAlias[]> // 外部类型别名映射：类名 -> 别名列表
+export type { VarAlias, ExternalAliasMap } // 导出类型定义
 
 function isGetLocalCall(sf: ts.SourceFile, expr: ts.Expression, serviceParamName: string, getLocalMethod: string): boolean { // 是否为 this.<service>.getLocal(...) 调用
   if (!expr || !ts.isCallExpression(expr)) return false // 不是调用表达式

@@ -1,9 +1,10 @@
 import { config } from '../core/config';
-import { processDictFiles } from './dict-process-mode';
-import { injectNgxTranslate } from './ngx-translate-injector';
-import { processTsFilesAndHandle } from './process-and-delete-mode';
+import { processDictFiles } from '../processor/dict-process-mode';
+import { injectNgxTranslate } from '../processor/ngx-translate-injector';
+import { processTsFilesAndHandle } from '../processor/process-and-delete-mode';
+import { startUiServer } from '../server/ui-server';
 
-export type Mode = 'replace' | 'delete' | 'dict-process' | 'inject-i18n';
+export type Mode = 'replace' | 'delete' | 'dict-process' | 'inject-i18n' | 'ui';
 
 export function dispatchMode(mode: Mode) {
   switch (mode) {
@@ -23,6 +24,9 @@ export function dispatchMode(mode: Mode) {
       injectNgxTranslate(
         config.dictDir || 'src/app/i18n'
       );
+      break;
+    case 'ui':
+      startUiServer(config.port || 3000); // Use configured port or default 3000
       break;
     default:
       throw new Error(`Unknown mode: ${mode}`);

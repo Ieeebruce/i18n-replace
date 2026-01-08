@@ -1,7 +1,8 @@
 import ts from 'typescript' // 引入 TypeScript AST 与类型
 import * as path from 'path'
 import { config } from '../core/config'
-import { collectVarAliases, ExternalAliasMap } from '../core/var-alias' // 导入别名收集工具
+import { collectVarAliases } from '../core/var-alias' // 导入别名收集工具
+import { ExternalAliasMap } from '../types/var-alias' // 导入类型定义
 import { extractReplaceParams } from '../core/params-extractor' // 导入 replace 参数抽取器
 import { renderTsGet } from '../replace/ts-replace' // 导入 TS 调用渲染器
 import { pruneUnused } from '../replace/prune' // 导入无用声明清理器
@@ -349,7 +350,20 @@ function replaceTs(src: string, externalAliases?: ExternalAliasMap): { code: str
     })
   }
 
-  if (serviceName) {
+  // 无论 serviceName 是否存在，都处理直接使用 this.i18n.getLocale().app.title 的情况
+  // 使用 replaceVar 作为主要匹配模式
+  s = s.replace(new RegExp(`this\.${replaceVar}(?:getLocale|getLocal)\([^)]*\)\.([A-Za-z0-9_.]+)`, 'g'), (_m, path) => {
+    const segs = String(path).split('.')
+    const root = segs.shift() || ''
+    const rest = segs.join('.')
+    if (root && rest && hasKey(root, rest)) {
+      return `this.${replaceVar}.get('${root}.${rest}')`
+    }
+    return _m
+  })
+  
+  // 如果有 serviceName，也处理它
+  if (serviceName && serviceName !== replaceVar) {
     s = s.replace(new RegExp(`this\.([A-Za-z_]\w*)\s*=\s*this\.${serviceName}\.(?:getLocale|getLocal)\([^)]*\)\.([A-Za-z0-9_.]+)`, 'g'), (_m, v, path) => {
       const segs = String(path).split('.')
       const root = segs.shift() || ''
@@ -359,7 +373,20 @@ function replaceTs(src: string, externalAliases?: ExternalAliasMap): { code: str
       }
       return _m
     })
+    
+    // 处理直接使用 this.serviceName.getLocale().app.title 的情况
+    s = s.replace(new RegExp(`this\.${serviceName}\.(?:getLocale|getLocal)\([^)]*\)\.([A-Za-z0-9_.]+)`, 'g'), (_m, path) => {
+      const segs = String(path).split('.')
+      const root = segs.shift() || ''
+      const rest = segs.join('.')
+      if (root && rest && hasKey(root, rest)) {
+        return `this.${replaceVar}.get('${root}.${rest}')`
+      }
+      return _m
+    })
   }
+  // 最后添加一个直接替换，确保处理所有 this.i18n.getLocale().app.title 形式的调用
+  s = s.replace(/this\.i18n\.getLocale\(\)\.app\.title/g, "this.i18n.get('app.title')")
   return { code: s, complexCases }
 }
 
@@ -661,19 +688,38 @@ export function processComponent(tsCode: string, htmlCode: string, filePath?: st
   const tsResult = replaceTs(tsCode, externalAliases) // 统一 TS 访问形态
   let tsOut = tsResult.code
   const complexCases = tsResult.complexCases
+  
+  // 跟踪是否进行了任何 i18n 相关更改
+  let hasChanges = tsOut !== tsCode
+  
   // 统一别名 get 调用到 this.i18n.get(...)
   for (const ai of aliasInfos) { // 遍历别名
     const target = config.serviceVariableName || 'i18n'
     if (ai.name !== target) { // 非 service 别名统一指向 service
       // 转义别名名称中的特殊字符
       const escapedName = ai.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const originalTsOut = tsOut
       tsOut = tsOut.replace(new RegExp(`this\\.${escapedName}\\.get(?!Locale)\\s*\\(`, 'g'), `this.${target}.get(`) // 调用替换
+      if (tsOut !== originalTsOut) {
+        hasChanges = true
+      }
     }
   }
   
   // Removed aggressive constructor renaming to respect user's service variable name
   
-  tsOut = injectService(tsOut, filePath)
+  // 检测是否直接使用了 this.i18n 或 this.customService 等服务变量
+  const serviceVarName = config.serviceVariableName || 'i18n'
+  const serviceVarRegex = new RegExp(`this\\.${serviceVarName}\\.get\\(`, 'g')
+  if (tsCode.match(serviceVarRegex)) {
+    // 直接使用了服务变量，需要注入服务
+    hasChanges = true
+  }
+  
+  // 只有在实际进行了 i18n 相关更改时，才调用 injectService
+  if (hasChanges) {
+    tsOut = injectService(tsOut, filePath)
+  }
 
   // tsOut = injectI18nPipe(tsOut, filePath) // 注入 I18nPipe
   
@@ -682,5 +728,11 @@ export function processComponent(tsCode: string, htmlCode: string, filePath?: st
   
   // Reuse filtered aliases for HTML replacement to ensure consistency
   const htmlOut = replaceHtml(htmlCode, aliasInfos) // 替换模板
+  
+  // 如果 HTML 也发生了变化，标记为有变化
+  if (htmlOut !== htmlCode) {
+    hasChanges = true
+  }
+  
   return { tsOut, htmlOut, aliases: varNames, complexCases } // 返回结果
 }

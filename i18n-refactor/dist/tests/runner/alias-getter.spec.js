@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const component_1 = require("../../src/runner/component");
+const component_1 = require("../../src/processor/component");
 describe('AliasGetterComponent', () => {
     it('should handle cross-file alias and remove assignment', () => {
         const code = `

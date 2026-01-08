@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const component_1 = require("../../src/runner/component");
+const component_1 = require("../../src/processor/component");
 test('prune getLocale assignments and any declarations', () => {
     const ts = `class C { local: any; i18n: any; 
   constructor(private locale: I18nLocaleService)

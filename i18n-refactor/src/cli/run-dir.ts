@@ -5,16 +5,18 @@ import ts from 'typescript'
 import { config } from '../core/config'
 import { configureLogger, info } from '../util/logger'
 import { setDictDir } from '../util/dict-reader'
-import { processComponent, ComplexCase } from './component'
-import { ExternalAliasMap } from '../core/var-alias'
+import { processComponent, ComplexCase } from '../processor/component'
+import { ExternalAliasMap } from '../types/var-alias'
 import { dispatchMode } from './mode-dispatcher'
-export { ensureAngularFiles } from './ensure-angular-mode';
+export { ensureAngularFiles } from '../processor/ensure-angular-mode';
 
 function readFile(p: string): string { return fs.readFileSync(p, 'utf8') } // 读取文本文件
 let dryRun = !!config.dryRun // 干运行，从配置读取
 function writeFile(p: string, s: string) { if (!dryRun) fs.writeFileSync(p, s, 'utf8') } // 写出文本文件（支持 dry-run）
 
 export function processTsFile(tsPath: string, externalAliases?: ExternalAliasMap): { changed: boolean; code: string; aliases: string[]; htmlPath: string | null; complexCases: ComplexCase[] } {
+
+
   const before = readFile(tsPath)
   const sf = ts.createSourceFile(tsPath, before, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
   // detect Angular Component and templateUrl
@@ -55,18 +57,20 @@ export function processTsFile(tsPath: string, externalAliases?: ExternalAliasMap
   return { changed: changedTs || changedHtml, code: tsOut, aliases, htmlPath, complexCases }
 }
 
-function main() {
+export function main() {
   const args = process.argv.slice(2) // 读取参数
-  let mode: 'replace' | 'delete' | 'dict-process' | 'inject-i18n' = 'replace'
-  const usage = `Usage: i18n-refactor [--mode=replace|delete|dict-process|inject-i18n] [--help] [--version]`
+  let mode: 'replace' | 'delete' | 'dict-process' | 'inject-i18n' | 'ui' = 'replace'
+  const usage = `Usage: i18n-refactor [--mode=replace|delete|dict-process|inject-i18n|ui] [--help] [--version]`
   const version = '0.2.0'
-  for (const a of args) { // 解析参数
-    const r = a.match(/^--mode=(replace|delete|dict-process|inject-i18n)$/)
+  
+  // 解析模式参数
+  for (const a of args) {
+    const r = a.match(/^--mode=(replace|delete|dict-process|inject-i18n|ui)$/)
     if (r) mode = r[1] as any
-    if (a === '--dry-run') dryRun = true
     if (a === '--help') { process.stdout.write(usage + '\n'); return }
     if (a === '--version') { process.stdout.write(version + '\n'); return }
   }
+  
   dryRun = !!config.dryRun
   configureLogger({ level: config.logLevel, format: (config.format === 'json' || config.format === 'pretty' ? config.format : 'pretty') })
   setDictDir(config.dictDir || 'src/app/i18n')
@@ -75,6 +79,4 @@ function main() {
   // 分发模式处理
   dispatchMode(mode);
 }
-
-main()
 

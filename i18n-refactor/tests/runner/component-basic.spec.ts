@@ -1,4 +1,4 @@
-import { processComponent } from '../../src/runner/component';
+import { processComponent } from '../../src/processor/component';
 import { config } from '../../src/core/config';
 
 test('basic: L alias with simple property', () => {

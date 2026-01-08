@@ -1,7 +1,7 @@
 
 import * as fs from 'fs'
 import * as path from 'path'
-import { processTsFile } from '../../src/runner/run-dir'
+import { processTsFile } from '../../src/cli/run-dir'
 
 // Mock fs module
 jest.mock('fs')

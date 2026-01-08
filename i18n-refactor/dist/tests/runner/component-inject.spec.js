@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const component_1 = require("../../src/runner/component");
+const component_1 = require("../../src/processor/component");
 const config_1 = require("../../src/core/config");
 describe('Component Service Injection', () => {
     const originalVarName = config_1.config.serviceVariableName;

@@ -1,4 +1,4 @@
-import { processComponent } from '../../src/runner/component'
+import { processComponent } from '../../src/processor/component'
 
 test('do not replace non-i18n array methods', () => {
   const ts = `class C { 

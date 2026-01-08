@@ -1,4 +1,4 @@
-import { processComponent } from '../../src/runner/component'
+import { processComponent } from '../../src/processor/component'
 
 test('dynamic index and params chain', () => {
   const ts = `class C { i18n: any; idx = 1; constructor(private locale: I18nLocaleService){ this.i18n = this.locale.getLocale() } run(){ console.log(this.i18n.list[this.idx]); console.log(this.i18n.templates.info.replace('{name}', user.name).replace('{count}', String(n))) } }`

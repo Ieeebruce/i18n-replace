@@ -29,7 +29,7 @@ export async function processDictFiles(dictDir: string, outDir: string, langs: s
       writeJson(path.isAbsolute(outDir) ? outDir : path.join(process.cwd(), outDir), lang, flat)
       info('dict processed and json written', { lang, file: fp, keys: Object.keys(flat).length })
     } catch (error) {
-      warn('failed to process dict file', { file: fp, error: String(error) })
+      warn('failed to process dict file', { file: fp, error: error as Error })
     }
   }
 }

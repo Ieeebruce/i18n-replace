@@ -1,4 +1,4 @@
-import { processComponent } from '../../src/runner/component'
+import { processComponent } from '../../src/processor/component'
 
 test('component runner returns original when no changes', () => {
   const r = processComponent('class A {}', '<div></div>')

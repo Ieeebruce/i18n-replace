@@ -24,7 +24,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const fs = __importStar(require("fs"));
-const run_dir_1 = require("../../src/runner/run-dir");
+const run_dir_1 = require("../../src/cli/run-dir");
 // Mock fs module
 jest.mock('fs');
 describe('run-dir processTsFile constructor replacement', () => {

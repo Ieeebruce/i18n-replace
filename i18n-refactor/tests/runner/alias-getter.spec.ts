@@ -1,5 +1,5 @@
 
-import { processComponent } from '../../src/runner/component'
+import { processComponent } from '../../src/processor/component'
 import { ExternalAliasMap, VarAlias } from '../../src/core/var-alias'
 import ts from 'typescript'
 

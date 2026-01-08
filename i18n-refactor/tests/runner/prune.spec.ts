@@ -1,4 +1,4 @@
-import { processComponent } from '../../src/runner/component'
+import { processComponent } from '../../src/processor/component'
 
 test('prune getLocale assignments and any declarations', () => {
   const ts = `class C { local: any; i18n: any; 
