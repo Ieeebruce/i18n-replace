@@ -5,6 +5,7 @@
 /tmp
 /out-tsc
 /bazel-out
+i18n-refactor/dist/
 
 # Node
 /node_modules
