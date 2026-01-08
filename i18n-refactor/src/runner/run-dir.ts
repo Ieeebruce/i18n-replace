@@ -8,6 +8,7 @@ import { setDictDir } from '../util/dict-reader'
 import { processComponent, ComplexCase } from './component'
 import { ExternalAliasMap } from '../core/var-alias'
 import { dispatchMode } from './mode-dispatcher'
+export { ensureAngularFiles } from './ensure-angular-mode';
 
 function readFile(p: string): string { return fs.readFileSync(p, 'utf8') } // 读取文本文件
 let dryRun = !!config.dryRun // 干运行，从配置读取

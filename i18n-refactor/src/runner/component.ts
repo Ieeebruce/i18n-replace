@@ -97,9 +97,10 @@ function buildAliases(code: string, externalAliases?: ExternalAliasMap): { alias
   return { aliases: Array.from(map.values()), serviceName } // 返回列表
 }
 
-function filterLeafAliases(tsCode: string, aliases: AliasInfo[]): AliasInfo[] {
+function filterLeafAliases(tsCode: string, aliases: AliasInfo[], serviceName: string): AliasInfo[] {
   const sf = ts.createSourceFile('x.ts', tsCode, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
   const usedAsAlias = new Set<string>()
+  const hasGetMethod = new Set<string>()
   
   const visit = (node: ts.Node) => {
     if (ts.isPropertyAccessExpression(node)) {
@@ -112,10 +113,23 @@ function filterLeafAliases(tsCode: string, aliases: AliasInfo[]): AliasInfo[] {
         }
       }
     }
+    // Check for this.x.get(...) usage
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'get') {
+       const obj = node.expression.expression;
+       if (ts.isPropertyAccessExpression(obj) && obj.expression.kind === ts.SyntaxKind.ThisKeyword && ts.isIdentifier(obj.name)) {
+          hasGetMethod.add(obj.name.text)
+       }
+    }
     ts.forEachChild(node, visit)
   }
   visit(sf)
-  const filtered = aliases.filter(a => usedAsAlias.has(a.name))
+  const filtered = aliases.filter(a => {
+    // Must be used as alias
+    if (!usedAsAlias.has(a.name)) return false;
+    // If it has .get() method and is NOT the service itself, it's not a data alias (e.g. formGroup)
+    if (hasGetMethod.has(a.name) && a.name !== serviceName) return false;
+    return true;
+  })
   return filtered
 }
 
@@ -642,7 +656,7 @@ function injectService(code: string, filePath?: string): string {
 
 export function processComponent(tsCode: string, htmlCode: string, filePath?: string, externalAliases?: ExternalAliasMap): { tsOut: string, htmlOut: string, aliases: string[], complexCases: ComplexCase[] } { // 编排组件：TS 与 HTML 一致替换
   const { aliases: rawAliases, serviceName } = buildAliases(tsCode, externalAliases) // 基于原始 TS 构建别名
-  const aliasInfos = filterLeafAliases(tsCode, rawAliases)
+  const aliasInfos = filterLeafAliases(tsCode, rawAliases, serviceName)
   const varNames = rawAliases.map(a => a.name) // 收集所有别名变量名（包括未使用的，以便清理定义）
   const tsResult = replaceTs(tsCode, externalAliases) // 统一 TS 访问形态
   let tsOut = tsResult.code
@@ -666,7 +680,7 @@ export function processComponent(tsCode: string, htmlCode: string, filePath?: st
   // Cleanup blank lines
   tsOut = tsOut.replace(/(\r?\n){3,}/g, '\n\n')
   
-  const { aliases: htmlAliases } = buildAliases(tsCode, externalAliases) // 基于原 TS 收集用于 HTML 的别名
-  const htmlOut = replaceHtml(htmlCode, htmlAliases) // 替换模板
+  // Reuse filtered aliases for HTML replacement to ensure consistency
+  const htmlOut = replaceHtml(htmlCode, aliasInfos) // 替换模板
   return { tsOut, htmlOut, aliases: varNames, complexCases } // 返回结果
 }
