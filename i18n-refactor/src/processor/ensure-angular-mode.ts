@@ -1,9 +1,23 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { info, warn } from '../util/logger'
+import { IOError } from '../util/errors'
 
-function readFile(p: string): string { return fs.readFileSync(p, 'utf8'); }
-function writeFile(p: string, s: string) { fs.writeFileSync(p, s, 'utf8'); }
+function readFile(p: string): string { 
+  try {
+    return fs.readFileSync(p, 'utf8'); 
+  } catch (error) {
+    throw new IOError(`Failed to read file: ${p}`, p);
+  }
+}
+
+function writeFile(p: string, s: string) { 
+  try {
+    fs.writeFileSync(p, s, 'utf8'); 
+  } catch (error) {
+    throw new IOError(`Failed to write file: ${p}`, p);
+  }
+}
 
 export function ensureAngularFiles(dictDir: string, mode: 'report'|'fix') {
   const svcPath = path.join(process.cwd(), 'src/app/i18n/index.ts')

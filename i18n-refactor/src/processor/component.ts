@@ -316,24 +316,25 @@ function replaceTs(src: string, externalAliases?: ExternalAliasMap): { code: str
   // Remove alias assignment statements in constructor
   for (const a of aliases) {
     if (a.declRange) {
-        console.error('[DEBUG] Checking removal for alias:', a.name, a.declRange)
+        // Removed debug logging
+        // console.error('[DEBUG] Checking removal for alias:', a.name, a.declRange)
         const k = `${a.declRange.s}:${a.declRange.e}`
         if (!seen.has(k)) {
             const overlap = reps.some(r => r.s >= a.declRange!.s && r.e <= a.declRange!.e)
             if (!overlap) {
-               console.error('[DEBUG] Adding removal rep:', a.name, a.declRange)
+               // console.error('[DEBUG] Adding removal rep:', a.name, a.declRange)
                reps.push({ s: a.declRange.s, e: a.declRange.e, text: '' })
                seen.add(k)
             } else {
-               console.error('[DEBUG] Skipping removal due to overlap:', a.name, a.declRange)
+               // console.error('[DEBUG] Skipping removal due to overlap:', a.name, a.declRange)
             }
         }
     } else {
-        console.error('[DEBUG] Alias has no declRange:', a.name)
+        // console.error('[DEBUG] Alias has no declRange:', a.name)
     }
   }
 
-  console.log('[DEBUG] Final reps:', reps.map(r => ({ ...r, text: r.text.slice(0, 50) })))
+  // console.log('[DEBUG] Final reps:', reps.map(r => ({ ...r, text: r.text.slice(0, 50) })))
   if (reps.length) { reps.sort((a, b) => b.s - a.s); for (const r of reps) s = s.slice(0, r.s) + r.text + s.slice(r.e) }
   // Fallback: plain property chains not followed by call/replace/[ or assignment
   for (const a of aliases) {

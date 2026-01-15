@@ -9,7 +9,8 @@
     "refactor:test": "node node_modules/jest/bin/jest.js --colors",
     "i18n-refactor:build": "node node_modules/typescript/bin/tsc -p i18n-refactor/tsconfig.json && cp -r i18n-refactor/src/server/ui i18n-refactor/dist/src/server/",
     "i18n-refactor:run": "npm run i18n-refactor:build && node i18n-refactor/dist/src/runner/run-dir.js --dir=src",
-    "i18n-refactor": "npm run i18n-refactor:build && node ./bin/i18n-refactor.js"
+    "i18n-refactor": "npm run i18n-refactor:build && node ./bin/i18n-refactor.js",
+    "deps:check-all": "node scripts/check-multi-versions.js"
   },
   "private": true,
   "dependencies": {

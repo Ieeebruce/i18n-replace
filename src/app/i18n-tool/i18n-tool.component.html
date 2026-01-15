@@ -1,0 +1,223 @@
+<div class="i18n-tool-container">
+  <header class="tool-header">
+    <h1>i18n-refactor 可视化工具</h1>
+    <p>用于Angular项目的国际化代码重构工具</p>
+  </header>
+
+  <main class="tool-main">
+    <!-- 模式选择面板 -->
+    <section class="mode-selection">
+      <h2>工具模式</h2>
+      <div class="mode-buttons">
+        <button 
+          class="mode-btn" 
+          [class.active]="selectedMode === 'replace'"
+          (click)="selectMode('replace')">
+          <span class="btn-icon">🔄</span>
+          <span class="btn-label">替换模式</span>
+          <small>将旧的国际化访问方式替换为标准格式</small>
+        </button>
+
+        <button 
+          class="mode-btn" 
+          [class.active]="selectedMode === 'delete'"
+          (click)="selectMode('delete')">
+          <span class="btn-icon">🗑️</span>
+          <span class="btn-label">删除模式</span>
+          <small>清理无用的属性声明</small>
+        </button>
+
+        <button 
+          class="mode-btn" 
+          [class.active]="selectedMode === 'dict-process'"
+          (click)="selectMode('dict-process')">
+          <span class="btn-icon">📊</span>
+          <span class="btn-label">字典处理</span>
+          <small>处理字典文件</small>
+        </button>
+
+        <button 
+          class="mode-btn" 
+          [class.active]="selectedMode === 'inject-i18n'"
+          (click)="selectMode('inject-i18n')">
+          <span class="btn-icon">🔌</span>
+          <span class="btn-label">注入国际化</span>
+          <small>注入国际化模块</small>
+        </button>
+
+        <button 
+          class="mode-btn" 
+          [class.active]="selectedMode === 'bootstrap'"
+          (click)="selectMode('bootstrap')">
+          <span class="btn-icon">⚡</span>
+          <span class="btn-label">环境初始化</span>
+          <small>准备运行环境</small>
+        </button>
+      </div>
+    </section>
+
+    <!-- 配置选项 -->
+    <section class="config-panel">
+      <h2>配置选项</h2>
+      <div class="config-options">
+        <div class="config-row">
+          <label for="dir">处理目录:</label>
+          <div class="directory-selector">
+            <input type="text" id="dir" [(ngModel)]="config.dir" placeholder="src" readonly>
+            <button type="button" class="browse-btn" (click)="openFolderDialog()">浏览</button>
+          </div>
+        </div>
+        
+        <div class="config-row">
+          <label for="dictDir">字典目录:</label>
+          <div class="directory-selector">
+            <input type="text" id="dictDir" [(ngModel)]="config.dictDir" placeholder="src/app/i18n" readonly>
+            <button type="button" class="browse-btn" (click)="openDictFolderDialog()">浏览</button>
+          </div>
+        </div>
+        
+        <div class="config-row">
+          <label for="languages">语言列表:</label>
+          <input type="text" id="languages" [(ngModel)]="config.languagesStr" placeholder="zh,en">
+        </div>
+        
+        <div class="config-row">
+          <label for="jsonOutDir">JSON输出目录:</label>
+          <div class="directory-selector">
+            <input type="text" id="jsonOutDir" [(ngModel)]="config.jsonOutDir" placeholder="i18n-refactor/out" readonly>
+            <button type="button" class="browse-btn" (click)="openJsonOutFolderDialog()">浏览</button>
+          </div>
+        </div>
+        
+        <div class="config-row">
+          <label>
+            <input type="checkbox" [(ngModel)]="config.dryRun"> 干运行模式
+          </label>
+          <small>预览变更而不实际修改文件</small>
+        </div>
+      </div>
+    </section>
+
+    <!-- 控制按钮 -->
+    <section class="control-panel">
+      <div class="action-buttons">
+        <button 
+          class="execute-btn" 
+          [disabled]="!selectedMode || executionStatus === 'running'"
+          (click)="executeTool()">
+          {{ executionStatus === 'running' ? '执行中...' : '执行工具' }}
+        </button>
+        
+        <button 
+          class="reset-btn" 
+          (click)="resetConfig()">
+          重置配置
+        </button>
+        
+        <button 
+          class="back-btn" 
+          (click)="goToEnvInit()">
+          返回环境初始化
+        </button>
+      </div>
+    </section>
+
+    <!-- 执行结果 -->
+    <section class="results-panel">
+      <h2>执行结果</h2>
+      
+      <div class="status-indicator" [class]="executionStatus">
+        <span class="status-text">{{ getStatusText() }}</span>
+      </div>
+      
+      <div class="output-area">
+        <div class="output-header">
+          <h3>输出日志</h3>
+          <button class="clear-btn" (click)="clearOutput()">清空</button>
+        </div>
+        <pre class="output-content">{{ outputLog }}</pre>
+      </div>
+      
+      <div class="summary-area" *ngIf="executionSummary">
+        <h3>执行摘要</h3>
+        <div class="summary-details">
+          <div class="summary-item">
+            <strong>处理目录:</strong> {{ executionSummary.dir }}
+          </div>
+          <div class="summary-item">
+            <strong>处理文件数:</strong> {{ executionSummary.files }}
+          </div>
+          <div class="summary-item">
+            <strong>已更改文件:</strong> {{ executionSummary.changed }}
+          </div>
+          <div class="summary-item" *ngIf="executionSummary.missingKeys !== undefined">
+            <strong>缺失键数:</strong> {{ executionSummary.missingKeys }}
+          </div>
+        </div>
+      </div>
+      
+      <!-- Directory Selection Modal -->
+      <div class="modal-overlay" *ngIf="showDirSelector" (click)="closeDirSelector()">
+        <div class="modal-content" (click)="$event.stopPropagation()" *ngIf="showDirSelector">
+          <div class="modal-header">
+            <h3>选择目录</h3>
+            <button class="close-btn" (click)="closeDirSelector()">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="current-path">
+              <button class="path-btn" (click)="goToParentDirectory()">..</button>
+              <span class="path-display">{{ currentPath }}</span>
+            </div>
+            <div class="directory-list">
+              <div 
+                class="dir-item" 
+                *ngFor="let dir of directoryList" 
+                (click)="selectDirectory(dir)">
+                <span class="dir-icon">📁</span>
+                <span class="dir-name">{{ dir.name }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="details-area" *ngIf="executionResults">
+        <h3>详细结果</h3>
+        <div class="files-section" *ngIf="executionResults.results && executionResults.results.length > 0">
+          <h4>文件列表</h4>
+          <div class="file-list">
+            <div class="file-item" *ngFor="let result of executionResults.results">
+              <span class="file-path">{{ result.file }}</span>
+              <span class="file-type">{{ result.type.toUpperCase() }}</span>
+              <span class="file-status" [class]="result.changed ? 'changed' : 'unchanged'">
+                {{ result.changed ? '已更改' : '未更改' }}
+              </span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="changes-section" *ngIf="executionResults.details && executionResults.details.length > 0">
+          <h4>变更详情</h4>
+          <div class="change-item" *ngFor="let detail of executionResults.details">
+            <div class="change-header">
+              <strong>{{ detail.file }}</strong> ({{ detail.type }})
+            </div>
+            <div class="change-details" *ngFor="let change of detail.changes">
+              <div class="change-line">
+                <span class="line-num">第{{ change.line }}行:</span>
+                <div class="change-comparison">
+                  <div class="before-change">
+                    <strong>之前:</strong> {{ change.before }}
+                  </div>
+                  <div class="after-change">
+                    <strong>之后:</strong> {{ change.after }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>

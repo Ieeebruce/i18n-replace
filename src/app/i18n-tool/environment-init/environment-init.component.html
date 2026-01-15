@@ -1,0 +1,71 @@
+<div class="environment-init-container">
+  <header class="init-header">
+    <h1>环境初始化</h1>
+    <p>这是i18n-refactor工具的第一步，请选择需要进行国际化重构的项目目录</p>
+  </header>
+
+  <main class="init-main">
+    <section class="path-selection">
+      <h2>选择项目目录</h2>
+      <div class="path-selector">
+        <input type="text" 
+               [(ngModel)]="selectedPath" 
+               placeholder="选择项目根目录..." 
+               readonly
+               class="path-input">
+        <button class="browse-btn" (click)="openPathSelector()">浏览</button>
+      </div>
+      <div class="path-info" *ngIf="selectedPath">
+        <p>已选择路径: <code>{{ selectedPath }}</code></p>
+        <p *ngIf="isValidPath" class="valid-path">✓ 有效的目录路径</p>
+        <p *ngIf="!isValidPath && selectedPath" class="invalid-path">⚠ 路径无效或不存在</p>
+      </div>
+    </section>
+
+    <section class="init-actions">
+      <div class="action-buttons">
+        <button class="primary-btn" 
+                [disabled]="!selectedPath || !isValidPath" 
+                (click)="initializeEnvironment()">
+          {{ isInitializing ? '初始化中...' : '开始环境初始化' }}
+        </button>
+        <button class="secondary-btn" (click)="goToMainTool()">跳转到主工具</button>
+      </div>
+    </section>
+
+    <section class="init-output" *ngIf="outputLog">
+      <h3>初始化输出</h3>
+      <div class="output-content">
+        <pre>{{ outputLog }}</pre>
+      </div>
+      <div class="output-actions">
+        <button class="clear-btn" (click)="clearOutput()">清除输出</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Directory Selection Modal -->
+  <div class="modal-overlay" *ngIf="showDirSelector" (click)="closeDirSelector()">
+    <div class="modal-content" (click)="$event.stopPropagation()" *ngIf="showDirSelector">
+      <div class="modal-header">
+        <h3>选择项目目录</h3>
+        <button class="close-btn" (click)="closeDirSelector()">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="current-path">
+          <button class="path-btn" (click)="goToParentDirectory()">..</button>
+          <span class="path-display">{{ currentPath }}</span>
+        </div>
+        <div class="directory-list">
+          <div 
+            class="dir-item" 
+            *ngFor="let dir of directoryList" 
+            (click)="selectDirectory(dir)">
+            <span class="dir-icon">📁</span>
+            <span class="dir-name">{{ dir.name }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

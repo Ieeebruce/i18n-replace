@@ -9,11 +9,28 @@ import { pruneUnused } from '../replace/prune';
 import { collectVarAliases } from '../core/var-alias';
 import { VarAlias } from '../types/var-alias';
 import { processFile } from './processor';
+import { IOError, ParseError, AstProcessingError } from '../util/errors';
 
 // 读取和写入文件的辅助函数
-function readFile(p: string): string { return fs.readFileSync(p, 'utf8') } // 读取文本文件
+function readFile(p: string): string { 
+  try {
+    return fs.readFileSync(p, 'utf8'); 
+  } catch (error) {
+    throw new IOError(`Failed to read file: ${p}`, p);
+  }
+} // 读取文本文件
+
 let dryRun = !!config.dryRun // 干运行，从配置读取
-function writeFile(p: string, s: string) { if (!dryRun) fs.writeFileSync(p, s, 'utf8') } // 写出文本文件（支持 dry-run）
+
+function writeFile(p: string, s: string) { 
+  if (!dryRun) {
+    try {
+      fs.writeFileSync(p, s, 'utf8'); 
+    } catch (error) {
+      throw new IOError(`Failed to write file: ${p}`, p);
+    }
+  }
+} // 写出文本文件（支持 dry-run）
 
 // 递归遍历目录并按过滤器收集文件
 export function walk(dir: string, filter: (p: string) => boolean): string[] {
@@ -50,13 +67,32 @@ function diffLines(a: string, b: string): Array<{ line: number; before: string; 
 function loadLangDict(dictDir: string, langPrefix: string, arrayMode: 'nested'|'flat'): Record<string, any> {
   const dir = path.join(process.cwd(), dictDir)
   if (!fs.existsSync(dir)) return {}
+  
   const re = new RegExp(`^${langPrefix}[A-Za-z0-9_-]*\\.ts$`)
   const files = fs.readdirSync(dir).filter(n => re.test(n))
+  
   let out: Record<string, any> = {}
   for (const name of files) {
     const fp = path.join(dir, name)
-    // 注意：这里需要导入flattenLangFile，暂时简化处理
-    out = { ...out, ...{} }
+    try {
+      const content = fs.readFileSync(fp, 'utf8')
+      // 使用正则表达式简单提取导出的对象内容
+      const match = content.match(/export\s+const\s+[a-zA-Z_$][a-zA-Z0-9_$]*\s+=\s+({[\s\S]*?})\s+(?:as\s+const)?\s*$/m)
+      if (match) {
+        try {
+          // 安全地解析TS对象字面量，使用Function构造函数替代eval
+          const objStr = match[1].trim()
+          // 创建一个临时函数来安全地解析对象
+          const func = new Function(`return (${objStr})`)
+          const extracted = func()
+          out = { ...out, ...extracted }
+        } catch (e) {
+          console.warn(`Could not parse dictionary file: ${fp}`, e)
+        }
+      }
+    } catch (error) {
+      console.warn(`Could not read dictionary file: ${fp}`, error)
+    }
   }
   return out
 }
@@ -142,24 +178,30 @@ function scanExternalAliases(tsFiles: string[]): Map<string, VarAlias[]> {
   info('scanning aliases', { count: tsFiles.length })
   
   for (const f of tsFiles) {
-    const src = readFile(f)
-    const sf = ts.createSourceFile(f, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
-    const { className, serviceName } = extractClassAndServiceNames(sf)
-    
-    if (className && serviceName) {
-      const aliases = collectVarAliases(sf, serviceName, config.getLocalMethod)
-      if (aliases.length) {
-        console.log(`[DEBUG] Found aliases in ${className}:`, aliases)
-        externalAliases.set(className, aliases)
+    try {
+      const src = readFile(f)
+      const sf = ts.createSourceFile(f, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+      
+      if (!sf) {
+        warn('Could not parse source file', { file: f });
+        continue;
+      }
+      
+      const { className, serviceName } = extractClassAndServiceNames(sf)
+      
+      if (className && serviceName) {
+        const aliases = collectVarAliases(sf, serviceName, config.getLocalMethod)
+        if (aliases.length) {
+          externalAliases.set(className, aliases)
+        }
+      }
+    } catch (error) {
+      if (error instanceof Error && (error.constructor.name === 'ParseError' || error.constructor.name === 'AstProcessingError')) {
+        warn('Error processing file during alias scan', { file: f, error });
+      } else {
+        warn('Unexpected error processing file during alias scan', { file: f, error: error instanceof Error ? error : new Error(String(error)) });
       }
     }
-  }
-  
-  console.log('[DEBUG] External aliases map keys:', Array.from(externalAliases.keys()))
-  if (externalAliases.size > 0) {
-      for (const [k, v] of externalAliases) {
-          console.log(`[DEBUG] External Alias ${k}:`, v.map(a => `${a.name}->${a.prefix}`))
-      }
   }
   
   return externalAliases
@@ -198,34 +240,48 @@ function processDeleteModeFile(
   details: Array<{ file: string; type: 'ts'|'html'; changes: Array<{ line: number; before: string; after: string; beforeKey: string | null; afterKey: string | null; zhBefore: string | null; enBefore: string | null; zhAfter: string | null; enAfter: string | null }>; deleted?: string[] }>,
   unionKeys: string[]
 ) {
-  const before = readFile(file)
-  const { code: after, deleted } = pruneUnused(ts.createSourceFile(file, before, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS), before, [])
-  const changedTs = after !== before
-  if (changedTs) writeFile(file, after)
-  
-  results.push({ file, type: 'ts', changed: changedTs, deleted: deleted?.length ? deleted : undefined })
-  
-  const tsDiff = diffLines(before, after)
-  const tsChanges = tsDiff.map(d => {
-    const ks = extractKeys(d.before, 'ts')
-    const ks2 = extractKeys(d.after, 'ts')
-    const bk = ks.oldKey ? pickKeyCandidate(unionKeys, ks.oldKey) : null
-    const ak = ks2.newKey || (ks2.oldKey ? pickKeyCandidate(unionKeys, ks2.oldKey) : null)
-    return {
-      line: d.line,
-      before: d.before,
-      after: d.after,
-      beforeKey: bk,
-      afterKey: ak,
-      zhBefore: null,
-      enBefore: null,
-      zhAfter: null,
-      enAfter: null
+  try {
+    const before = readFile(file)
+    const sourceFile = ts.createSourceFile(file, before, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+    
+    if (!sourceFile) {
+      warn('Could not parse source file', { file });
+      return;
     }
-  })
-  
-  if (tsChanges.length || (deleted && deleted.length)) {
-    details.push({ file, type: 'ts', changes: tsChanges, deleted })
+    
+    const { code: after, deleted } = pruneUnused(sourceFile, before, [])
+    const changedTs = after !== before
+    if (changedTs) writeFile(file, after)
+    
+    results.push({ file, type: 'ts', changed: changedTs, deleted: deleted?.length ? deleted : undefined })
+    
+    // 只有在发生变化时才计算差异，提高性能
+    if (changedTs) {
+      const tsDiff = diffLines(before, after)
+      const tsChanges = tsDiff.map(d => {
+        const ks = extractKeys(d.before, 'ts')
+        const ks2 = extractKeys(d.after, 'ts')
+        const bk = ks.oldKey ? pickKeyCandidate(unionKeys, ks.oldKey) : null
+        const ak = ks2.newKey || (ks2.oldKey ? pickKeyCandidate(unionKeys, ks2.oldKey) : null)
+        return {
+          line: d.line,
+          before: d.before,
+          after: d.after,
+          beforeKey: bk,
+          afterKey: ak,
+          zhBefore: null,
+          enBefore: null,
+          zhAfter: null,
+          enAfter: null
+        }
+      })
+      
+      if (tsChanges.length || (deleted && deleted.length)) {
+        details.push({ file, type: 'ts', changes: tsChanges, deleted })
+      }
+    }
+  } catch (error) {
+    warn('Error processing file in delete mode', { file, error: error instanceof Error ? error : new Error(String(error)) });
   }
 }
 
