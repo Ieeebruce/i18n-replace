@@ -1,5 +1,5 @@
 <div class="data-table-container" style="padding: 2rem;">
-  <h2>{{ i18n.table.columns.name }} {{ i18n.common.message.noData }}</h2>
+  <h2>{{ 'table.columns.name' | i18n }} {{ 'common.message.noData' | i18n }}</h2>
   
   <!-- 工具栏 -->
   <div class="toolbar" style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
@@ -9,12 +9,12 @@
         type="text" 
         [(ngModel)]="searchKeyword" 
         (keyup.enter)="search()"
-        [placeholder]="i18n.table.filter.placeholder"
+        [placeholder]="i18n.get({key: 'table.filter.placeholder'})"
         style="width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px;">
       <button 
         (click)="search()" 
         style="margin-left: 0.5rem; padding: 0.5rem 1rem; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
-        {{ i18n.common.button.search }}
+        {{ 'common.button.search' | i18n }}
       </button>
     </div>
     
@@ -24,24 +24,24 @@
         (click)="setFilter('all')" 
         [style.background-color]="currentFilter === 'all' ? '#007bff' : '#6c757d'"
         style="padding: 0.5rem 1rem; color: white; border: none; border-radius: 4px; cursor: pointer;">
-        {{ i18n.table.filter.all }}
+        {{ 'table.filter.all' | i18n }}
       </button>
       <button 
         (click)="setFilter('active')" 
         [style.background-color]="currentFilter === 'active' ? '#28a745' : '#6c757d'"
         style="padding: 0.5rem 1rem; color: white; border: none; border-radius: 4px; cursor: pointer;">
-        {{ i18n.table.filter.active }}
+        {{ 'table.filter.active' | i18n }}
       </button>
       <button 
         (click)="setFilter('inactive')" 
         [style.background-color]="currentFilter === 'inactive' ? '#dc3545' : '#6c757d'"
         style="padding: 0.5rem 1rem; color: white; border: none; border-radius: 4px; cursor: pointer;">
-        {{ i18n.table.filter.inactive }}
+        {{ 'table.filter.inactive' | i18n }}
       </button>
       <button 
         (click)="refresh()" 
         style="padding: 0.5rem 1rem; background-color: #17a2b8; color: white; border: none; border-radius: 4px; cursor: pointer;">
-        {{ i18n.table.actions.refresh }}
+        {{ 'table.actions.refresh' | i18n }}
       </button>
     </div>
   </div>
@@ -51,24 +51,24 @@
     <thead style="background-color: #f8f9fa;">
       <tr>
         <th (click)="sort('id')" style="padding: 0.75rem; border: 1px solid #ddd; cursor: pointer;">
-          {{ i18n.table.columns.id }}
+          {{ 'table.columns.id' | i18n }}
           <span *ngIf="sortColumn === 'id'">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
         </th>
         <th (click)="sort('name')" style="padding: 0.75rem; border: 1px solid #ddd; cursor: pointer;">
-          {{ i18n.table.columns.name }}
+          {{ 'table.columns.name' | i18n }}
           <span *ngIf="sortColumn === 'name'">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
         </th>
-        <th style="padding: 0.75rem; border: 1px solid #ddd;">{{ i18n.table.columns.email }}</th>
-        <th style="padding: 0.75rem; border: 1px solid #ddd;">{{ i18n.table.columns.phone }}</th>
+        <th style="padding: 0.75rem; border: 1px solid #ddd;">{{ 'table.columns.email' | i18n }}</th>
+        <th style="padding: 0.75rem; border: 1px solid #ddd;">{{ 'table.columns.phone' | i18n }}</th>
         <th (click)="sort('status')" style="padding: 0.75rem; border: 1px solid #ddd; cursor: pointer;">
-          {{ i18n.table.columns.status }}
+          {{ 'table.columns.status' | i18n }}
           <span *ngIf="sortColumn === 'status'">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
         </th>
         <th (click)="sort('createTime')" style="padding: 0.75rem; border: 1px solid #ddd; cursor: pointer;">
-          {{ i18n.table.columns.createTime }}
+          {{ 'table.columns.createTime' | i18n }}
           <span *ngIf="sortColumn === 'createTime'">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
         </th>
-        <th style="padding: 0.75rem; border: 1px solid #ddd;">{{ i18n.table.columns.actions }}</th>
+        <th style="padding: 0.75rem; border: 1px solid #ddd;">{{ 'table.columns.actions' | i18n }}</th>
       </tr>
     </thead>
     <tbody>
@@ -81,7 +81,7 @@
           <span 
             [style.color]="user.status === 'active' ? '#28a745' : '#dc3545'"
             [style.font-weight]="'bold'">
-            {{ user.status === 'active' ? i18n.table.filter.active : i18n.table.filter.inactive }}
+            {{ user.status === 'active' ? ('table.filter.active' | i18n) : ('table.filter.inactive' | i18n) }}
           </span>
         </td>
         <td style="padding: 0.75rem; border: 1px solid #ddd;">{{ user.createTime }}</td>
@@ -89,23 +89,23 @@
           <button 
             (click)="viewUser(user)" 
             style="margin-right: 0.25rem; padding: 0.25rem 0.5rem; background-color: #17a2b8; color: white; border: none; border-radius: 3px; cursor: pointer;">
-            {{ i18n.table.actions.view }}
+            {{ 'table.actions.view' | i18n }}
           </button>
           <button 
             (click)="editUser(user)" 
             style="margin-right: 0.25rem; padding: 0.25rem 0.5rem; background-color: #ffc107; color: white; border: none; border-radius: 3px; cursor: pointer;">
-            {{ i18n.table.actions.edit }}
+            {{ 'table.actions.edit' | i18n }}
           </button>
           <button 
             (click)="deleteUser(user)" 
             style="padding: 0.25rem 0.5rem; background-color: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer;">
-            {{ i18n.table.actions.delete }}
+            {{ 'table.actions.delete' | i18n }}
           </button>
         </td>
       </tr>
       <tr *ngIf="filteredUsers.length === 0">
         <td colspan="7" style="padding: 2rem; text-align: center; color: #6c757d;">
-          {{ i18n.common.message.noData }}
+          {{ 'common.message.noData' | i18n }}
         </td>
       </tr>
     </tbody>
@@ -114,8 +114,8 @@
   <!-- 分页 -->
   <div class="pagination" style="margin-top: 1rem; display: flex; justify-content: space-between; align-items: center;">
     <div class="pagination-info">
-      {{ i18n.common.pagination.total.replace('{total}', totalItems.toString()) }}
-      {{ i18n.common.pagination.pageSize.replace('{size}', pageSize.toString()) }}
+      {{ ('common.pagination.total.replace' | i18n).replace('{total}', totalItems.toString()) }}
+      {{ ('common.pagination.pageSize.replace' | i18n).replace('{size}', pageSize.toString()) }}
     </div>
     <div class="pagination-controls" style="display: flex; gap: 0.5rem; align-items: center;">
       <button 
@@ -131,7 +131,7 @@
         ‹
       </button>
       <span style="padding: 0 1rem;">
-        {{ i18n.common.pagination.page }} {{ currentPage }} / {{ getTotalPages() }}
+        {{ 'common.pagination.page' | i18n }} {{ currentPage }} / {{ getTotalPages() }}
       </span>
       <button 
         (click)="goToPage(currentPage + 1)" 

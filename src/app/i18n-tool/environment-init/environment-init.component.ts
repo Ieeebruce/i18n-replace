@@ -61,8 +61,8 @@ export class EnvironmentInitComponent implements OnInit {
 
   // Navigate to parent directory
   goToParentDirectory() {
-    const parentPath = require('path').dirname(this.currentPath);
-    this.loadDirectories(parentPath);
+    // const parentPath = require('path').dirname(this.currentPath);
+    // this.loadDirectories(parentPath);
   }
 
   // Close directory selector

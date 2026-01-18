@@ -5,46 +5,328 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>I18n Refactor Tool</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
-        .container { max-width: 1400px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        h1 { margin-top: 0; }
-        .controls { margin-bottom: 20px; padding: 10px; background: #eee; border-radius: 4px; display: flex; gap: 10px; align-items: center; }
-        button { padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
-        button:hover { background: #0056b3; }
-        button:disabled { background: #ccc; cursor: not-allowed; }
-        .file-list { margin-bottom: 20px; border: 1px solid #ddd; border-radius: 4px; overflow-y: auto; height: calc(100vh - 250px); }
-        .file-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-        .file-item:hover { background: #f0f8ff; }
-        .file-item.selected { background: #e6f7ff; border-left: 4px solid #1890ff; }
-        .file-item:last-child { border-bottom: none; }
-        .diff-container { margin-top: 20px; height: calc(100vh - 250px); overflow: auto; border: 1px solid #ddd; border-radius: 4px; }
-        .status { margin-left: auto; font-size: 14px; color: #666; }
-        .loading { color: #1890ff; font-weight: bold; }
-        .badge { padding: 2px 6px; border-radius: 4px; font-size: 12px; margin-left: 8px; }
-        .badge-ts { background: #007bff; color: white; }
-        .badge-html { background: #e06c75; color: white; }
+        :root {
+            --primary-color: #007aff;
+            --primary-hover: #0062cc;
+            --success-color: #34c759;
+            --danger-color: #ff3b30;
+            --warning-color: #ffcc00;
+            --text-primary: #1c1c1e;
+            --text-secondary: #8e8e93;
+            --bg-color: #f2f2f7;
+            --card-bg: #ffffff;
+            --border-color: #e5e5ea;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+            --shadow-md: 0 4px 6px rgba(0,0,0,0.05);
+            --font-stack: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            --code-font: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+        }
+
+        body { 
+            font-family: var(--font-stack); 
+            margin: 0; 
+            padding: 24px; 
+            background: var(--bg-color); 
+            color: var(--text-primary);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container { 
+            max-width: 1400px; 
+            margin: 0 auto; 
+            background: transparent; 
+        }
+
+        h1 { 
+            margin: 0 0 24px 0; 
+            font-weight: 700; 
+            font-size: 28px;
+            letter-spacing: -0.5px;
+        }
+
+        h3 {
+            margin: 0 0 16px 0;
+            font-weight: 600;
+            font-size: 16px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .controls { 
+            margin-bottom: 24px; 
+            padding: 16px; 
+            background: var(--card-bg); 
+            border-radius: 12px; 
+            box-shadow: var(--shadow-sm);
+            display: flex; 
+            gap: 12px; 
+            align-items: center; 
+            flex-wrap: wrap;
+        }
+
+        button { 
+            padding: 10px 20px; 
+            background: var(--primary-color); 
+            color: white; 
+            border: none; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            font-size: 14px; 
+            font-weight: 600;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0,122,255,0.2);
+        }
+
+        button:hover:not(:disabled) { 
+            background: var(--primary-hover); 
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,122,255,0.3);
+        }
+
+        button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        button:disabled { 
+            background: #d1d1d6; 
+            cursor: not-allowed; 
+            box-shadow: none;
+            opacity: 0.7;
+        }
+        
+        #reloadBtn {
+            background: var(--success-color);
+            box-shadow: 0 2px 4px rgba(52,199,89,0.2);
+        }
+        
+        #reloadBtn:hover {
+            background: #2db34a;
+            box-shadow: 0 4px 8px rgba(52,199,89,0.3);
+        }
+
+        .file-list { 
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: var(--shadow-md);
+            overflow-y: auto; 
+            height: calc(100vh - 280px); 
+            border: 1px solid var(--border-color);
+        }
+
+        .file-item { 
+            padding: 12px 16px; 
+            border-bottom: 1px solid var(--border-color); 
+            cursor: pointer; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            transition: background 0.2s;
+            font-size: 14px;
+        }
+
+        .file-item:hover { 
+            background: #f2f2f7; 
+        }
+
+        .file-item.selected { 
+            background: #eef7ff; 
+            border-left: 4px solid var(--primary-color); 
+            padding-left: 12px;
+        }
+
+        .file-item:last-child { 
+            border-bottom: none; 
+        }
+
+        .diff-container { 
+            background: var(--card-bg);
+            margin-top: 16px; 
+            height: calc(100vh - 280px); 
+            overflow: auto; 
+            border-radius: 12px; 
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-color);
+        }
+
+        .status { 
+            margin-left: auto; 
+            font-size: 14px; 
+            color: var(--text-secondary); 
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .status::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success-color);
+        }
+
+        .loading { 
+            color: var(--primary-color); 
+            font-weight: 600; 
+        }
+        
+        .loading::before {
+            background: var(--warning-color);
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .badge { 
+            padding: 4px 8px; 
+            border-radius: 6px; 
+            font-size: 11px; 
+            font-weight: 600;
+            margin-left: 6px; 
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .badge-ts { background: #e3f2fd; color: #1976d2; }
+        .badge-html { background: #fce4ec; color: #c2185b; }
+        .badge-risk-high { background: #ffebee; color: #c62828; }
+        .badge-risk-medium { background: #fff8e1; color: #f57f17; }
         
         /* Custom diff styles */
-        .diff-content { font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.5; }
-        .diff-section { margin-bottom: 20px; }
-        .diff-header { background: #f0f0f0; padding: 8px 12px; font-weight: bold; border-bottom: 1px solid #ddd; }
-        .diff-line { display: flex; align-items: center; padding: 2px 8px; border-bottom: 1px solid #f0f0f0; }
-        .diff-line-number { width: 50px; text-align: right; padding-right: 12px; color: #999; user-select: none; }
-        .diff-line-content { flex: 1; white-space: pre-wrap; word-break: break-word; }
-        .diff-added { background: #d4edda; color: #155724; }
-        .diff-deleted { background: #f8d7da; color: #721c24; text-decoration: line-through; }
-        .diff-changed { background: #fff3cd; color: #856404; }
-        .diff-unchanged { background: #ffffff; color: #333333; }
+        .diff-content { 
+            font-family: var(--code-font); 
+            font-size: 12px; 
+            line-height: 1.6; 
+        }
+
+        .diff-section { 
+            margin-bottom: 24px; 
+        }
+
+        .diff-header { 
+            background: #f8f9fa; 
+            padding: 12px 16px; 
+            font-weight: 600; 
+            font-size: 14px;
+            border-bottom: 1px solid var(--border-color); 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            color: var(--text-primary);
+        }
+
+        .diff-line { 
+            display: flex; 
+            align-items: stretch; 
+            border-bottom: 1px solid #f8f9fa; 
+        }
+
+        .diff-line-number { 
+            width: 48px; 
+            text-align: right; 
+            padding: 4px 12px 4px 0; 
+            color: #c7c7cc; 
+            user-select: none; 
+            background: #fafafa;
+            border-right: 1px solid #f0f0f0;
+            font-size: 11px;
+        }
+
+        .diff-line-content { 
+            flex: 1; 
+            white-space: pre-wrap; 
+            word-break: break-word; 
+            padding: 4px 12px;
+        }
+
+        .diff-added { background: #e6ffec; color: #24292e; }
+        .diff-deleted { background: #ffebe9; color: #24292e; text-decoration: line-through; text-decoration-color: rgba(255,59,48,0.4); }
+        .diff-changed { background: #fffbe6; color: #24292e; }
+        .diff-unchanged { background: #ffffff; color: #24292e; }
+        
+        .change-risk-high { 
+            border-left: 4px solid var(--danger-color); 
+            margin: 12px 16px;
+            border-radius: 0 8px 8px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+        
+        .change-risk-medium { 
+            border-left: 4px solid var(--warning-color); 
+            margin: 12px 16px;
+            border-radius: 0 8px 8px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+        
+        .change-normal {
+            margin: 12px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        #cmdOutput {
+            background: #1e1e1e !important;
+            color: #d4d4d4 !important;
+            border-radius: 8px !important;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+            font-family: var(--code-font) !important;
+            padding: 16px !important;
+            margin-bottom: 24px !important;
+        }
+        
+        #viewModeControls label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-left: 12px;
+            cursor: pointer;
+        }
+        
+        #viewModeControls input {
+            margin-right: 6px;
+        }
+        
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #d1d1d6;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #8e8e93;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>I18n Refactor Visualization</h1>
         <div class="controls">
-            <button id="scanBtn">Scan Project</button>
-            <button id="applyBtn" disabled>Apply All Changes</button>
+            <button id="runAllBtn" style="background: #6610f2;">Run Full Analysis (Scan + Migrate + Plan)</button>
+            <div style="width: 1px; height: 24px; background: #e5e5ea; margin: 0 8px;"></div>
+            <button id="scanBtn">1. Scan</button>
+            <button id="migrateBtn">2. Migrate</button>
+            <button id="planBtn">3. Plan</button>
+            <button id="applyBtn" disabled>4. Apply Changes</button>
+            <button id="reloadBtn" style="background: #28a745;">Reload View</button>
             <span id="statusText" class="status">Ready</span>
         </div>
+
+        <div id="cmdOutput" style="display: none; background: #333; color: #fff; padding: 10px; border-radius: 4px; margin-bottom: 20px; max-height: 200px; overflow-y: auto; font-family: monospace; white-space: pre-wrap;"></div>
 
         <div style="display: flex; gap: 20px;">
             <div style="flex: 0 0 300px; display: flex; flex-direction: column;">
@@ -70,82 +352,49 @@
 
     <script>
         // Simple diff algorithm implementation
-        function generateDiff(before, after, fileName, viewMode) {
-            const beforeLines = before.split('\n');
-            const afterLines = after.split('\n');
-            let result = `<div class="diff-section"><div class="diff-header">${fileName}</div>`;
+        function generateDiff(fileData, viewMode) {
+            const fileName = fileData.tsPath;
+            // Reconstruct diff from changes
+            // We use the "changes" array attached to the fileData
             
-            if (viewMode === 'side-by-side') {
-                // Side by Side view
-                result += `<div class="diff-content" style="display: flex;">
-                    <div style="flex: 1; padding-right: 10px; border-right: 1px solid #ddd;">
-                        <div style="background: #f0f0f0; padding: 4px 8px; font-weight: bold; text-align: center;">Before</div>`;
-                
-                let maxLines = Math.max(beforeLines.length, afterLines.length);
-                for (let i = 0; i < maxLines; i++) {
-                    const beforeLine = beforeLines[i] || '';
-                    const afterLine = afterLines[i] || '';
-                    const isChanged = beforeLine !== afterLine;
+            let result = `<div class="diff-section"><div class="diff-header">
+                <span>${fileName}</span>
+                <span>
+                    ${fileData.riskLevel ? `<span class="badge badge-risk-${fileData.riskLevel.toLowerCase()}">Risk: ${fileData.riskLevel}</span>` : ''}
+                </span>
+            </div>`;
+            
+            // We show changes as a list of modifications since we don't have full file content
+            result += `<div class="diff-content">`;
+            
+            if (fileData.changes && fileData.changes.length > 0) {
+                fileData.changes.forEach((change, i) => {
+                    const confidence = change.confidence || 'HIGH';
+                    const riskClass = confidence !== 'HIGH' ? (confidence === 'LOW' ? 'change-risk-high' : 'change-risk-medium') : '';
+                    const riskBadge = confidence !== 'HIGH' ? `<span class="badge badge-risk-${confidence === 'LOW' ? 'high' : 'medium'}">${confidence} Confidence</span>` : '';
                     
-                    result += `<div class="diff-line ${isChanged ? 'diff-deleted' : 'diff-unchanged'}">
-                        <span class="diff-line-number">${i+1}</span>
-                        <span class="diff-line-content">${escapeHtml(beforeLine)}</span>
+                    result += `<div style="margin-bottom: 10px; border: 1px solid #eee; ${confidence !== 'HIGH' ? 'border-color: #ffc107;' : ''}" class="${riskClass}">
+                        <div style="background: #f9f9f9; padding: 4px 8px; font-size: 12px; color: #666; display: flex; justify-content: space-between;">
+                            <span>Change #${i+1} at pos ${change.start} (Type: ${change.type || 'TS'})</span>
+                            <span>${riskBadge}</span>
+                        </div>
+                        <div style="display: flex;">
+                            <div style="flex: 1; padding: 5px; border-right: 1px solid #eee; background: #fff5f5;">
+                                <div style="color: #999; font-size: 11px; margin-bottom: 2px;">Original:</div>
+                                <pre style="margin: 0; white-space: pre-wrap;">${escapeHtml(change.originalCode)}</pre>
+                            </div>
+                            <div style="flex: 1; padding: 5px; background: #f0fff4;">
+                                <div style="color: #999; font-size: 11px; margin-bottom: 2px;">New:</div>
+                                <pre style="margin: 0; white-space: pre-wrap;">${escapeHtml(change.newCode)}</pre>
+                            </div>
+                        </div>
                     </div>`;
-                }
-                
-                result += `</div>
-                    <div style="flex: 1; padding-left: 10px;">
-                        <div style="background: #f0f0f0; padding: 4px 8px; font-weight: bold; text-align: center;">After</div>`;
-                
-                for (let i = 0; i < maxLines; i++) {
-                    const beforeLine = beforeLines[i] || '';
-                    const afterLine = afterLines[i] || '';
-                    const isChanged = beforeLine !== afterLine;
-                    
-                    result += `<div class="diff-line ${isChanged ? 'diff-added' : 'diff-unchanged'}">
-                        <span class="diff-line-number">${i+1}</span>
-                        <span class="diff-line-content">${escapeHtml(afterLine)}</span>
-                    </div>`;
-                }
-                
-                result += `</div>
-                </div>`;
+                });
             } else {
-                // Line by Line view (original implementation)
-                result += `<div class="diff-content">`;
-                
-                let maxLines = Math.max(beforeLines.length, afterLines.length);
-                for (let i = 0; i < maxLines; i++) {
-                    const beforeLine = beforeLines[i] || '';
-                    const afterLine = afterLines[i] || '';
-                    
-                    if (beforeLine === afterLine) {
-                        // Unchanged line
-                        result += `<div class="diff-line diff-unchanged">
-                            <span class="diff-line-number">${i+1}</span>
-                            <span class="diff-line-content">${escapeHtml(beforeLine)}</span>
-                        </div>`;
-                    } else {
-                        // Changed line
-                        if (beforeLine !== '') {
-                            result += `<div class="diff-line diff-deleted">
-                                <span class="diff-line-number">${i+1}</span>
-                                <span class="diff-line-content">${escapeHtml(beforeLine)}</span>
-                            </div>`;
-                        }
-                        if (afterLine !== '') {
-                            result += `<div class="diff-line diff-added">
-                                <span class="diff-line-number">${i+1}</span>
-                                <span class="diff-line-content">${escapeHtml(afterLine)}</span>
-                            </div>`;
-                        }
-                    }
-                }
-                
-                result += '</div>';
+                result += `<div style="padding: 10px; color: #999;">No detailed changes available to display.</div>`;
             }
             
-            result += '</div>';
+            result += '</div></div>';
             return result;
         }
         
@@ -157,14 +406,19 @@
         let filesData = [];
         let currentFileIndex = -1;
 
+        const runAllBtn = document.getElementById('runAllBtn');
         const scanBtn = document.getElementById('scanBtn');
+        const migrateBtn = document.getElementById('migrateBtn');
+        const planBtn = document.getElementById('planBtn');
         const applyBtn = document.getElementById('applyBtn');
+        const reloadBtn = document.getElementById('reloadBtn');
         const statusText = document.getElementById('statusText');
         const fileList = document.getElementById('fileList');
         const diffOutput = document.getElementById('diffOutput');
         const fileCount = document.getElementById('fileCount');
         const currentFileLabel = document.getElementById('currentFileLabel');
         const viewModeInputs = document.querySelectorAll('input[name="viewMode"]');
+        const cmdOutput = document.getElementById('cmdOutput');
 
         // View mode handling
         let currentViewMode = 'side-by-side';
@@ -176,36 +430,184 @@
                 }
             });
         });
+        
+        function showOutput(text) {
+            cmdOutput.style.display = 'block';
+            cmdOutput.textContent = text;
+            cmdOutput.scrollTop = cmdOutput.scrollHeight;
+        }
 
-        scanBtn.addEventListener('click', async () => {
-            statusText.textContent = 'Scanning...';
-            statusText.classList.add('loading');
-            scanBtn.disabled = true;
-            fileList.innerHTML = '<div style="padding: 10px;">Scanning...</div>';
+        async function runStep(mode, btn, silent = false) {
+            if (!silent) {
+                statusText.textContent = `Running ${mode}...`;
+                statusText.classList.add('loading');
+                if (btn) btn.disabled = true;
+            }
             
             try {
-                const res = await fetch('/api/scan');
-                const data = await res.json();
-                filesData = data.results.filter(f => f.changed);
+                const res = await fetch('/api/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode })
+                });
+                const result = await res.json();
+                
+                if (result.success) {
+                    showOutput(result.output);
+                    if (!silent) statusText.textContent = `${mode} completed successfully.`;
+                    
+                    // Special handling for completion
+                    if (mode === 'plan') {
+                        loadPlan();
+                    } else if (mode === 'scan') {
+                        if (!silent) statusText.textContent = 'Scan complete. Please run Migrate next.';
+                    } else if (mode === 'migrate') {
+                        if (!silent) statusText.textContent = 'Migrate complete. Please run Plan next.';
+                    }
+                    return true;
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (e) {
+                statusText.textContent = `Error ${mode}: ` + e.message;
+                showOutput(`Error: ${e.message}`);
+                return false;
+            } finally {
+                if (!silent) {
+                    statusText.classList.remove('loading');
+                    if (btn) btn.disabled = false;
+                }
+            }
+        }
+
+        async function runAll() {
+            runAllBtn.disabled = true;
+            scanBtn.disabled = true;
+            migrateBtn.disabled = true;
+            planBtn.disabled = true;
+            
+            statusText.textContent = 'Running full analysis... (Step 1/3: Scan)';
+            statusText.classList.add('loading');
+            
+            const scanOk = await runStep('scan', null, true);
+            if (!scanOk) {
+                resetButtons();
+                return;
+            }
+            
+            statusText.textContent = 'Running full analysis... (Step 2/3: Migrate)';
+            const migrateOk = await runStep('migrate', null, true);
+            if (!migrateOk) {
+                resetButtons();
+                return;
+            }
+            
+            statusText.textContent = 'Running full analysis... (Step 3/3: Plan)';
+            const planOk = await runStep('plan', null, true);
+            
+            statusText.classList.remove('loading');
+            resetButtons();
+            
+            if (planOk) {
+                statusText.textContent = 'Full analysis complete. Review changes below.';
+            }
+        }
+        
+        function resetButtons() {
+            runAllBtn.disabled = false;
+            scanBtn.disabled = false;
+            migrateBtn.disabled = false;
+            planBtn.disabled = false;
+            statusText.classList.remove('loading');
+        }
+
+        runAllBtn.addEventListener('click', runAll);
+        scanBtn.addEventListener('click', () => runStep('scan', scanBtn));
+        migrateBtn.addEventListener('click', () => runStep('migrate', migrateBtn));
+        planBtn.addEventListener('click', () => runStep('plan', planBtn));
+
+        // Initialize: fetch plan directly
+        async function loadPlan() {
+            statusText.textContent = 'Loading plan...';
+            statusText.classList.add('loading');
+            
+            try {
+                const res = await fetch('/api/plan');
+                const plan = await res.json();
+                
+                if (plan.error) {
+                    // Plan not found is expected if not run yet
+                    console.log('Plan not found yet');
+                    fileList.innerHTML = '<div style="padding: 10px; color: #999;">No plan loaded. Run Scan -> Migrate -> Plan first.</div>';
+                    statusText.textContent = 'Ready (No plan loaded)';
+                    return;
+                }
+
+                // Transform plan data to fit UI model
+                // Plan format: { changes: [...], complexCases: [...], stats: ... }
+                // UI expects: [{ tsPath, changes: [], riskLevel }]
+                
+                const changesByFile = {};
+                plan.changes.forEach(change => {
+                    if (!changesByFile[change.file]) {
+                        changesByFile[change.file] = {
+                            path: change.file,
+                            changes: [],
+                            maxRisk: 'LOW' // Default
+                        };
+                    }
+                    changesByFile[change.file].changes.push(change);
+                    
+                    // Update max risk
+                    const confidence = change.confidence || 'HIGH';
+                    const currentRisk = changesByFile[change.file].maxRisk;
+                    
+                    if (confidence === 'LOW') {
+                        changesByFile[change.file].maxRisk = 'HIGH';
+                    } else if (confidence === 'MEDIUM' && currentRisk !== 'HIGH') {
+                        changesByFile[change.file].maxRisk = 'MEDIUM';
+                    }
+                });
+                
+                filesData = Object.values(changesByFile).map(f => {
+                    // Sort changes by start position
+                    f.changes.sort((a, b) => a.start - b.start);
+                    
+                    return {
+                        tsPath: f.path,
+                        changes: f.changes,
+                        riskLevel: f.maxRisk === 'LOW' ? null : f.maxRisk // Only set if not LOW/HIGH confidence
+                    };
+                });
+
                 fileCount.textContent = filesData.length;
                 renderFileList();
-                statusText.textContent = `Found ${filesData.length} files to change.`;
+                statusText.textContent = `Loaded plan with ${plan.stats.totalChanges} changes in ${filesData.length} files.`;
+                
                 if (filesData.length > 0) {
                     applyBtn.disabled = false;
                     selectFile(0);
                 } else {
                     applyBtn.disabled = true;
-                    diffOutput.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">No changes found.</div>';
+                    diffOutput.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">No changes in plan.</div>';
                 }
+
             } catch (e) {
                 statusText.textContent = 'Error: ' + e.message;
-                fileList.innerHTML = '<div style="padding: 10px; color: red;">Error scanning</div>';
+                fileList.innerHTML = `<div style="padding: 10px; color: red;">Error loading plan: ${e.message}</div>`;
             } finally {
                 statusText.classList.remove('loading');
-                scanBtn.disabled = false;
             }
-        });
+        }
 
+        // Load plan on startup
+        loadPlan();
+
+        // Scan button now just re-loads plan (assuming user ran scan in CLI)
+        // Or we could trigger a scan API if we implemented it. 
+        // For now, let's make it reload the plan.
+        reloadBtn.addEventListener('click', loadPlan);
+        
         applyBtn.addEventListener('click', async () => {
             if (!confirm('Are you sure you want to apply changes to all ' + filesData.length + ' files?')) return;
             
@@ -247,8 +649,16 @@
                 const name = file.tsPath.split('/').pop();
                 
                 let badges = '';
-                if (file.tsBefore !== file.tsAfter) badges += '<span class="badge badge-ts">TS</span>';
-                if (file.htmlPath && file.htmlBefore !== file.htmlAfter) badges += '<span class="badge badge-html">HTML</span>';
+                // Check types of changes
+                const hasTs = file.changes.some(c => c.type === 'TS');
+                const hasHtml = file.changes.some(c => c.type === 'HTML');
+                
+                if (hasTs) badges += '<span class="badge badge-ts">TS</span>';
+                if (hasHtml) badges += '<span class="badge badge-html">HTML</span>';
+                
+                if (file.riskLevel) {
+                    badges += `<span class="badge badge-risk-${file.riskLevel.toLowerCase()}">${file.riskLevel} Risk</span>`;
+                }
 
                 div.innerHTML = `<span>${name}</span><div>${badges}</div>`;
                 div.onclick = () => selectFile(index);
@@ -271,18 +681,7 @@
         }
 
         function renderDiff(file) {
-            let diffHtml = '';
-            
-            // TS Diff
-            if (file.tsBefore !== file.tsAfter) {
-                diffHtml += generateDiff(file.tsBefore, file.tsAfter, 'TypeScript', currentViewMode);
-            }
-
-            // HTML Diff
-            if (file.htmlPath && file.htmlBefore !== file.htmlAfter) {
-                diffHtml += generateDiff(file.htmlBefore, file.htmlAfter, 'HTML Template', currentViewMode);
-            }
-
+            let diffHtml = generateDiff(file, currentViewMode);
             diffOutput.innerHTML = diffHtml;
         }
     </script>

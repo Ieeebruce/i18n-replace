@@ -57,15 +57,15 @@ export function processTsFile(tsPath: string, externalAliases?: ExternalAliasMap
   return { changed: changedTs || changedHtml, code: tsOut, aliases, htmlPath, complexCases }
 }
 
-export function main() {
+export async function main() {
   const args = process.argv.slice(2) // 读取参数
-  let mode: 'replace' | 'delete' | 'dict-process' | 'inject-i18n' | 'ui' = 'replace'
-  const usage = `Usage: i18n-refactor [--mode=replace|delete|dict-process|inject-i18n|ui] [--help] [--version]`
-  const version = '0.2.0'
+  let mode: 'replace' | 'delete' | 'dict-process' | 'inject-i18n' | 'ui' | 'scan' | 'migrate' | 'plan' | 'apply' = 'replace'
+  const usage = `Usage: i18n-refactor [--mode=replace|delete|dict-process|inject-i18n|ui|scan|migrate|plan|apply] [--help] [--version]`
+  const version = '0.3.0'
   
   // 解析模式参数
   for (const a of args) {
-    const r = a.match(/^--mode=(replace|delete|dict-process|inject-i18n|ui)$/)
+    const r = a.match(/^--mode=(replace|delete|dict-process|inject-i18n|ui|scan|migrate|plan|apply)$/)
     if (r) mode = r[1] as any
     if (a === '--help') { process.stdout.write(usage + '\n'); return }
     if (a === '--version') { process.stdout.write(version + '\n'); return }
@@ -77,6 +77,6 @@ export function main() {
   info('start', { dir: config.dir, mode, dryRun })
 
   // 分发模式处理
-  dispatchMode(mode);
+  await dispatchMode(mode);
 }
 

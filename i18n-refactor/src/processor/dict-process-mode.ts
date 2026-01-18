@@ -3,6 +3,8 @@ import * as path from 'path';
 import { info, warn } from '../util/logger';
 import { flattenLangFile, writeJson } from '../util/dict-flatten';
 
+import { loadDictFile } from '../util/dict-simple';
+
 /**
  * 专门处理词条读取、拍平并写入文件的函数
  * @param dictDir 词条文件目录
@@ -11,7 +13,7 @@ import { flattenLangFile, writeJson } from '../util/dict-flatten';
  * @param arrayMode 数组模式
  */
 export async function processDictFiles(dictDir: string, outDir: string, langs: string[], arrayMode: 'nested'|'flat') {
-  const { loadDictFile } = await import('../util/dict-simple');
+  // const { loadDictFile } = await import('../util/dict-simple');
   
   for (const lang of langs) {
     const fp = path.join(process.cwd(), dictDir, `${lang}.ts`);

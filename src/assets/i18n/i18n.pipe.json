@@ -1,0 +1,3 @@
+{
+  "I18nPipe": "class {\n        constructor(locale) {\n            this.locale = locale;\n        }\n        transform(key, params) {\n            return this.locale.get(key, params);\n        }\n    }"
+}

@@ -49,3 +49,6 @@ report/
 
 # Logs
 *.log
+
+# i18n refactor
+.i18n-refactor-cache/

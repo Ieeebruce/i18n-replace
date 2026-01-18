@@ -1,7 +1,7 @@
 import { Component } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { FormsModule } from '@angular/forms'
-import { I18nLocaleService } from '../../i18n'
+import { I18nLocaleService, I18nPipe } from '../../i18n'
 
 interface User {
   id: number
@@ -15,12 +15,11 @@ interface User {
 @Component({
   selector: 'app-data-table',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, I18nPipe],
   templateUrl: './data-table.component.html',
   styleUrl: './data-table.component.scss'
 })
 export class DataTableComponent {
-  i18n: any
   users: User[] = []
   filteredUsers: User[] = []
   searchKeyword = ''
@@ -33,8 +32,8 @@ export class DataTableComponent {
   pageSize = 5
   totalItems = 0
 
-  constructor(private locale: I18nLocaleService) {
-    this.i18n = this.locale.getLocale()
+  constructor(public i18n: I18nLocaleService) {
+    
     this.initData()
   }
 
@@ -111,19 +110,19 @@ export class DataTableComponent {
   }
 
   viewUser(user: User) {
-    alert(this.i18n.table.actions.view + ': ' + user.name)
+    alert(this.i18n.get({key: 'table.actions.view'}) + ': ' + user.name)
   }
 
   editUser(user: User) {
-    alert(this.i18n.table.actions.edit + ': ' + user.name)
+    alert(this.i18n.get({key: 'table.actions.edit'}) + ': ' + user.name)
   }
 
   deleteUser(user: User) {
-    const confirmMsg = this.i18n.notification.warning.deleteConfirm.replace('{item}', user.name)
+    const confirmMsg = this.i18n.get({key: 'notification.warning.deleteConfirm.replace'}).replace('{item}', user.name)
     if (confirm(confirmMsg)) {
       this.users = this.users.filter(u => u.id !== user.id)
       this.applyFilters()
-      alert(this.i18n.notification.success.deleted.replace('{item}', user.name))
+      alert(this.i18n.get({key: 'notification.success.deleted.replace'}).replace('{item}', user.name))
     }
   }
 
@@ -132,7 +131,7 @@ export class DataTableComponent {
     this.currentFilter = 'all'
     this.currentPage = 1
     this.initData()
-    alert(this.i18n.notification.success.saved)
+    alert(this.i18n.get({key: 'notification.success.saved'}))
   }
 
   getTotalPages(): number {

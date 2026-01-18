@@ -1,12 +1,12 @@
 import { Component } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { FormsModule } from '@angular/forms'
-import { I18nLocaleService } from '../../i18n'
+import { I18nLocaleService, I18nPipe } from '../../i18n'
 
 @Component({
   selector: 'app-user-login',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, I18nPipe],
   templateUrl: './user-login.component.html',
   styleUrl: './user-login.component.scss'
 })
@@ -18,37 +18,37 @@ export class UserLoginComponent {
   loading = false
   errorMessage = ''
 
-  constructor(private locale: I18nLocaleService) {
-    this.dict = this.locale.getLocale()
+  constructor(public i18n: I18nLocaleService) {
+    
   }
 
   onSubmit() {
     // 验证
     if (!this.username) {
-      this.errorMessage = this.dict.validation.required.replace('{field}', this.dict.user.login.username)
+      this.errorMessage = this.i18n.get({key: 'validation.required.replace'}, { field: this.i18n.get({key: 'user.login.username'}) })
       return
     }
     
     if (!this.password) {
-      this.errorMessage = this.dict.validation.required.replace('{field}', this.dict.user.login.password)
+      this.errorMessage = this.i18n.get({key: 'validation.required.replace'}, { field: this.i18n.get({key: 'user.login.password'}) })
       return
     }
 
     // 模拟登录
     this.loading = true
-    this.errorMessage = ''
+    
     
     setTimeout(() => {
       this.loading = false
       if (this.username === 'admin' && this.password === '123456') {
-        alert(this.dict.user.login.loginSuccess)
+        alert(this.i18n.get({key: 'user.login.loginSuccess'}))
       } else {
-        this.errorMessage = this.dict.user.login.loginFailed
+        
       }
     }, 1000)
   }
 
   forgotPassword() {
-    alert(this.dict.common.message.confirm)
+    alert(this.i18n.get({key: 'common.message.confirm'}))
   }
 }

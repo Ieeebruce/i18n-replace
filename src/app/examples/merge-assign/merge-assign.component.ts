@@ -1,11 +1,11 @@
 import { Component } from '@angular/core'
 import { CommonModule } from '@angular/common'
-import { I18nLocaleService, ZH } from '../../i18n'
+import { I18nLocaleService, ZH, I18nPipe } from '../../i18n'
 
 @Component({
   selector: 'app-merge-assign',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, I18nPipe],
   templateUrl: './merge-assign.component.html',
   styleUrl: './merge-assign.component.scss'
 })
@@ -21,19 +21,19 @@ export class MergeAssignComponent {
   onlyApp: string;
   greet: string;
   constructor(public locale: I18nLocaleService) {
-    this.dict = this.locale.getLocale();
-    this.i18n = {...this.locale.getLocale().app, ...this.locale.getLocale().home}
-    this.dictMerge = { ...this.locale.getLocale().common, ...this.locale.getLocale().app }
+    
+    // this.i18n = {...this.i18n.get({key: 'app'}), ...this.i18n.get({key: 'home'})}
+    // this.dictMerge = { ...this.i18n.get({key: 'common'}), ...this.i18n.get({key: 'app'}) }
   }
 
   xx() {
-    this.title = this.dict.app.description
-    this.title2 = this.i18n.welcome
-    this.header = this.dictMerge.header
-    this.footer = this.dictMerge.footer
-    this.onlyCommon = this.dictMerge.onlyCommon
-    this.onlyApp = this.dictMerge.onlyApp
-    this.greet = this.dictMerge.user.greetTpl.replace('{name}', '李雷')
+    
+    // this.title2 = this.i18n.welcome
+    // this.header = this.dictMerge.header
+    // this.footer = this.dictMerge.footer
+    // this.onlyCommon = this.dictMerge.onlyCommon
+    // this.onlyApp = this.dictMerge.onlyApp
+    // this.greet = this.dictMerge.user.greetTpl.replace('{name}', '李雷')
   }
 
 }

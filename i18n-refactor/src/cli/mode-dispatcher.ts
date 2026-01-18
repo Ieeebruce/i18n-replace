@@ -3,11 +3,24 @@ import { processDictFiles } from '../processor/dict-process-mode';
 import { injectNgxTranslate } from '../processor/ngx-translate-injector';
 import { processTsFilesAndHandle } from '../processor/process-and-delete-mode';
 import { startUiServer } from '../server/ui-server';
+import { Orchestrator } from './orchestrator';
 
-export type Mode = 'replace' | 'delete' | 'dict-process' | 'inject-i18n' | 'ui';
+export type Mode = 'replace' | 'delete' | 'dict-process' | 'inject-i18n' | 'ui' | 'scan' | 'migrate' | 'plan' | 'apply';
 
-export function dispatchMode(mode: Mode) {
+export async function dispatchMode(mode: Mode) {
   switch (mode) {
+    case 'scan':
+      await Orchestrator.scan();
+      break;
+    case 'migrate':
+      await Orchestrator.migrate();
+      break;
+    case 'plan':
+      await Orchestrator.plan();
+      break;
+    case 'apply':
+      await Orchestrator.apply();
+      break;
     case 'replace':
     case 'delete':
       processTsFilesAndHandle(mode);

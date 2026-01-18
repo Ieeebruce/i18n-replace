@@ -2,6 +2,8 @@ import { Injectable } from '@angular/core';
 import { en } from './en';
 import { zh } from './zh';
 export type ZH = typeof zh;
+export * from './i18n.pipe';
+
 @Injectable({ providedIn: 'root' })
 export class I18nLocaleService {
   lang: 'zh' | 'en' = 'zh';
@@ -13,7 +15,8 @@ export class I18nLocaleService {
     }
     return this.lang === 'en' ? en as any : zh;
   }
-  get(key: string, params?: Record<string, unknown>) {
+  get(options: { key: string } | string, params?: Record<string, unknown>) {
+    const key = typeof options === 'string' ? options : options.key;
     const pack = this.getLocale() as any;
     const val = key.split('.').reduce((o, k) => (o ? o[k] : undefined), pack);
     let s = typeof val === 'string' ? val : '';

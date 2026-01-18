@@ -37,7 +37,63 @@ export async function loadDictFile(fp: string): Promise<Record<string, any>> {
       const module = { exports: {} }
       const requireFunc = (id: string) => {
         if (id === 'typescript') return ts
-        return require(id)
+        try {
+          return require(id)
+        } catch (e: any) {
+          if (e.code === 'ERR_REQUIRE_ESM') {
+            // Mock object for ESM modules like @angular/core
+            // We just need it to not crash when imported
+            // And handle decorators like @Pipe({name: 'i18n'})
+            return new Proxy({}, {
+              get: (target, prop) => {
+                // Return a function that returns a function (decorator factory)
+                return () => () => {};
+              }
+            });
+          }
+          // Try to resolve relative path manually if it fails
+          if (id.startsWith('.')) {
+             try {
+               const resolved = path.resolve(path.dirname(fp), id);
+               // Check if it's a TS file that needs transpilation
+               // We might need to recursively call loadDictFile logic or just transpile here.
+               // But loadDictFile is async... require is sync. 
+               // This is tricky. 
+               // Ideally we should use a custom require hook or similar.
+               // For now, let's assume if it's a local .ts file, we read and transpile it synchronously here.
+               const extensions = ['.ts', '.js', '.json'];
+               let targetPath = '';
+               for (const ext of extensions) {
+                 if (fs.existsSync(resolved + ext)) {
+                   targetPath = resolved + ext;
+                   break;
+                 }
+               }
+               if (fs.existsSync(resolved) && fs.statSync(resolved).isFile()) {
+                  targetPath = resolved;
+               }
+
+               if (targetPath && targetPath.endsWith('.ts')) {
+                 const source = fs.readFileSync(targetPath, 'utf8');
+                 const compiled = ts.transpile(source, {
+                    module: ts.ModuleKind.CommonJS,
+                    target: ts.ScriptTarget.ES2020,
+                    strict: false,
+                    esModuleInterop: true
+                  });
+                 const m = { exports: {} };
+                 const f = new Function('exports', 'require', 'module', '__filename', '__dirname', compiled);
+                 f(m.exports, requireFunc, m, targetPath, path.dirname(targetPath));
+                 return m.exports;
+               } else if (targetPath) {
+                 return require(targetPath);
+               }
+             } catch (innerE) {
+               // ignore
+             }
+          }
+          throw e
+        }
       }
       
       moduleFunc(module.exports, requireFunc, module, fp, path.dirname(fp))

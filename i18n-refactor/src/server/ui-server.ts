@@ -1,12 +1,12 @@
 import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
-import ts from 'typescript';
-import { config } from '../core/config';
-import { walk } from '../processor/process-and-delete-mode';
-import { processFile, FileResult } from '../processor/processor';
-import { collectVarAliases } from '../core/var-alias';
-import { VarAlias, ExternalAliasMap } from '../types/var-alias';
+import { exec } from 'child_process';
+import { CodeMod } from '../transformer/code-mod';
+import { RefactorManifest } from '../core/types';
+
+const CACHE_DIR = '.i18n-refactor-cache';
+const PLAN_FILE = path.join(process.cwd(), CACHE_DIR, 'plan.json');
 
 function getMimeType(filePath: string): string {
   const ext = path.extname(filePath);
@@ -18,65 +18,23 @@ function getMimeType(filePath: string): string {
   }
 }
 
-function scanProject(): FileResult[] {
-  const dir = config.dir || process.cwd();
-  const tsFiles = walk(dir, p => p.endsWith('.ts'));
-  const externalAliases = new Map<string, VarAlias[]>();
-  
-  // 1. Scan for aliases first (same logic as process-and-delete-mode)
-  for (const f of tsFiles) {
-    try {
-      const src = fs.readFileSync(f, 'utf8');
-      const sf = ts.createSourceFile(f, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-      let className = '';
-      let serviceName = '';
-      const visit = (node: ts.Node) => {
-        if (ts.isClassDeclaration(node) && node.name) {
-          className = node.name.text;
-          for (const m of node.members) {
-            if (ts.isConstructorDeclaration(m)) {
-              for (const p of m.parameters) {
-                if (p.type && ts.isTypeReferenceNode(p.type) && ts.isIdentifier(p.type.typeName) && p.type.typeName.text === config.serviceTypeName) {
-                  if (ts.isIdentifier(p.name)) serviceName = p.name.text;
-                }
-              }
+function runCommand(command: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+        exec(command, { cwd: process.cwd() }, (error, stdout, stderr) => {
+            if (error) {
+                reject(stderr || error.message);
+                return;
             }
-          }
-        }
-        ts.forEachChild(node, visit);
-      };
-      visit(sf);
-      if (className && serviceName) {
-        const aliases = collectVarAliases(sf, serviceName, config.getLocalMethod);
-        if (aliases.length) {
-          externalAliases.set(className, aliases);
-        }
-      }
-    } catch (e) {
-      console.error('Error scanning file for aliases:', f, e);
-    }
-  }
-
-  // 2. Process all files
-  const results: FileResult[] = [];
-  for (const f of tsFiles) {
-    try {
-      const res = processFile(f, externalAliases);
-      results.push(res);
-    } catch (e) {
-      console.error('Error processing file:', f, e);
-    }
-  }
-  return results;
+            resolve(stdout);
+        });
+    });
 }
 
 export function startUiServer(port: number = 3000) {
-  // Get the directory where this script is located
   const scriptDir = path.dirname(__filename);
   const uiDir = path.join(scriptDir, 'ui');
   
   const server = http.createServer(async (req, res) => {
-    // Enable CORS for development convenience if needed
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -87,46 +45,88 @@ export function startUiServer(port: number = 3000) {
       return;
     }
 
-    // 检查请求路径
     const reqUrl = req.url || '/';
-    // 提取路径部分，忽略查询参数
     const urlPath = reqUrl.split('?')[0];
     
-    // 处理 API 路由
-    if (urlPath === '/api/scan') {
+    // API: Run Command
+    if (urlPath === '/api/run' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const data = JSON.parse(body);
+                const mode = data.mode; // 'scan', 'migrate', 'plan'
+                
+                if (!['scan', 'migrate', 'plan'].includes(mode)) {
+                    throw new Error('Invalid mode');
+                }
+
+                // Run the CLI command
+                // We need to point to the correct executable or script.
+                // Assuming we are running from project root.
+                // We should use 'npm run i18n-refactor -- --mode=...' or node directly.
+                // Using npm run is safer for env.
+                const cmd = `npm run i18n-refactor -- --mode=${mode}`;
+                const output = await runCommand(cmd);
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, output }));
+            } catch (e) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: String(e) }));
+            }
+        });
+        return;
+    }
+
+    // API: Get Plan
+    if (urlPath === '/api/plan') {
       try {
-        const results = scanProject();
+        if (!fs.existsSync(PLAN_FILE)) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Plan file not found. Run "i18n-refactor plan" first.' }));
+          return;
+        }
+        const plan = fs.readFileSync(PLAN_FILE, 'utf8');
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ results }));
+        res.end(plan);
       } catch (e) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: String(e) }));
       }
       return;
     }
-    
+
+    // API: Apply Changes
     if (urlPath === '/api/apply' && req.method === 'POST') {
       let body = '';
       req.on('data', chunk => body += chunk);
-      req.on('end', () => {
+      req.on('end', async () => {
         try {
           const data = JSON.parse(body);
-          const filesToApply: string[] = data.files || [];
-          let appliedCount = 0;
+          const filesToApply: string[] = data.files || []; // List of files to apply
           
-          const results = scanProject();
-          for (const r of results) {
-            if (filesToApply.includes(r.tsPath) && r.changed) {
-              fs.writeFileSync(r.tsPath, r.tsAfter, 'utf8');
-              if (r.htmlPath && r.htmlAfter !== r.htmlBefore) {
-                fs.writeFileSync(r.htmlPath, r.htmlAfter, 'utf8');
-              }
-              appliedCount++;
-            }
+          if (!fs.existsSync(PLAN_FILE)) {
+            throw new Error('Plan file not found');
           }
           
+          const fullManifest: RefactorManifest = JSON.parse(fs.readFileSync(PLAN_FILE, 'utf8'));
+          
+          // Filter manifest to only include requested files
+          // If filesToApply is empty, maybe apply all? Or none?
+          // Let's assume if provided, filter. If not provided or empty, apply all (or error).
+          // For safety, let's require files list.
+          
+          const filteredManifest: RefactorManifest = {
+            ...fullManifest,
+            changes: fullManifest.changes.filter(c => filesToApply.includes(c.file))
+          };
+
+          const codemod = new CodeMod();
+          await codemod.apply(filteredManifest);
+          
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: true, count: appliedCount }));
+          res.end(JSON.stringify({ success: true, count: filteredManifest.changes.length }));
         } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: String(e) }));
@@ -135,10 +135,9 @@ export function startUiServer(port: number = 3000) {
       return;
     }
     
-    // 处理静态文件请求
+    // Serve Static Files
     let filePath = urlPath === '/' ? path.join(uiDir, 'index.html') : path.join(uiDir, urlPath);
     
-    // 检查文件是否存在
     if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
       try {
         const content = fs.readFileSync(filePath);
@@ -151,25 +150,24 @@ export function startUiServer(port: number = 3000) {
       }
     }
     
-    // 根路径回退 - 如果index.html不存在，尝试返回根路径
+    // Fallback index.html
     if (urlPath === '/') {
-      try {
-        const content = fs.readFileSync(path.join(uiDir, 'index.html'));
-        res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(content);
-        return;
-      } catch (e) {
-        console.error('Error reading index.html:', e);
-      }
+        // Try fallback locations if running from src
+        const fallbackUi = path.join(process.cwd(), 'i18n-refactor/src/server/ui/index.html');
+         if (fs.existsSync(fallbackUi)) {
+            const content = fs.readFileSync(fallbackUi);
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(content);
+            return;
+         }
     }
 
-    // 其他路径返回404
     res.writeHead(404);
     res.end('Not found');
   });
 
   server.listen(port, () => {
     console.log(`UI Server running at http://localhost:${port}`);
-    console.log('Open this URL in your browser to visualize and apply changes.');
+    console.log('Open this URL in your browser to review the plan.');
   });
 }

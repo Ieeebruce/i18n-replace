@@ -20,8 +20,8 @@ export class TodolistComponent {
   nextId = 1
   title: any;
 constructor(private locale: I18nLocaleService) {
-  this.i18n = this.locale.getLocale();
-  this.title = this.i18n.app.title
+  
+  
 }
   ngOnInit() {
     const s = localStorage.getItem('todo.items')

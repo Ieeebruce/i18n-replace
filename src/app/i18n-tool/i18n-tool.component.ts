@@ -73,8 +73,8 @@ export class I18nToolComponent {
   }
 
   goToParentDirectory() {
-    const parentPath = require('path').dirname(this.currentPath);
-    this.loadDirectories(parentPath);
+    // const parentPath = require('path').dirname(this.currentPath);
+    // this.loadDirectories(parentPath);
   }
 
   closeDirSelector() {

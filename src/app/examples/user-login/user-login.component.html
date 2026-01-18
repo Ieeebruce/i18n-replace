@@ -1,9 +1,9 @@
 <div class="login-container" style="max-width: 400px; margin: 2rem auto; padding: 2rem; border: 1px solid #ddd; border-radius: 8px;">
-  <h2>{{ dict.user.login.title }}</h2>
+  <h2>{{ 'user.login.title' | i18n }}</h2>
   
   <form (ngSubmit)="onSubmit()" #loginForm="ngForm">
     <div class="form-group" style="margin-bottom: 1rem;">
-      <label>{{ dict.user.login.username }}</label>
+      <label>{{ 'user.login.username' | i18n }}</label>
       <input 
         type="text" 
         class="form-control" 
@@ -13,7 +13,7 @@
     </div>
 
     <div class="form-group" style="margin-bottom: 1rem;">
-      <label>{{ dict.user.login.password }}</label>
+      <label>{{ 'user.login.password' | i18n }}</label>
       <input 
         type="password" 
         class="form-control" 
@@ -30,7 +30,7 @@
         name="rememberMe"
         id="rememberMe">
       <label class="form-check-label" for="rememberMe" style="margin-left: 0.5rem;">
-        {{ dict.user.login.remember }}
+        {{ 'user.login.remember' | i18n }}
       </label>
     </div>
 
@@ -43,15 +43,15 @@
       class="btn btn-primary" 
       [disabled]="loading"
       style="width: 100%; padding: 0.5rem; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
-      {{ loading ? dict.common.message.loading : dict.user.login.loginBtn }}
+      {{ loading ? ('common.message.loading' | i18n) : ('user.login.loginBtn' | i18n) }}
     </button>
 
     <div class="links" style="margin-top: 1rem; text-align: center;">
       <a (click)="forgotPassword()" style="color: #007bff; cursor: pointer; margin-right: 1rem;">
-        {{ dict.user.login.forgotPassword }}
+        {{ 'user.login.forgotPassword' | i18n }}
       </a>
-      <span>{{ dict.user.login.noAccount }}</span>
-      <a href="#" style="color: #007bff; margin-left: 0.5rem;">{{ dict.user.login.signUp }}</a>
+      <span>{{ 'user.login.noAccount' | i18n }}</span>
+      <a href="#" style="color: #007bff; margin-left: 0.5rem;">{{ 'user.login.signUp' | i18n }}</a>
     </div>
   </form>
 </div>

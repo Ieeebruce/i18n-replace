@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">74.56% </span>
+                <span class="strong">74.44% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>340/456</span>
+                <span class='fraction'>335/450</span>
             </div>
         
             
@@ -37,16 +37,16 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">63.88% </span>
+                <span class="strong">62.85% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>23/36</span>
+                <span class='fraction'>22/35</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">76.84% </span>
+                <span class="strong">76.81% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>322/419</span>
+                <span class='fraction'>318/414</span>
             </div>
         
             
@@ -801,7 +801,8 @@
 <a name='L736'></a><a href='#L736'>736</a>
 <a name='L737'></a><a href='#L737'>737</a>
 <a name='L738'></a><a href='#L738'>738</a>
-<a name='L739'></a><a href='#L739'>739</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">13x</span>
+<a name='L739'></a><a href='#L739'>739</a>
+<a name='L740'></a><a href='#L740'>740</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">13x</span>
 <span class="cline-any cline-yes">13x</span>
 <span class="cline-any cline-yes">13x</span>
 <span class="cline-any cline-yes">13x</span>
@@ -1119,24 +1120,25 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">24x</span>
 <span class="cline-any cline-yes">24x</span>
-<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-yes">12x</span>
 <span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">17x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">36x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">36x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">24x</span>
@@ -1857,24 +1859,25 @@ function replaceTs(src: string, externalAliases?: ExternalAliasMap): { code: str
   // Remove alias assignment statements in constructor
   for (const a of aliases) {
     if (a.declRange) {
-        console.error('[DEBUG] Checking removal for alias:', a.name, a.declRange)
+        // Removed debug logging
+        // console.error('[DEBUG] Checking removal for alias:', a.name, a.declRange)
         const k = `${a.declRange.s}:${a.declRange.e}`
         if (!seen.has(k)) {
             const overlap = reps.some(r =&gt; r.s &gt;= a.declRange!.s &amp;&amp; r.e &lt;= a.declRange!.e)
             if (!overlap) {
-               console.error('[DEBUG] Adding removal rep:', a.name, a.declRange)
+               // console.error('[DEBUG] Adding removal rep:', a.name, a.declRange)
                reps.push({ s: a.declRange.s, e: a.declRange.e, text: '' })
                seen.add(k)
             } else <span class="missing-if-branch" title="else path not taken" >E</span>{
-<span class="cstat-no" title="statement not covered" >               console.error('[DEBUG] Skipping removal due to overlap:', a.name, a.declRange)</span>
+               // console.error('[DEBUG] Skipping removal due to overlap:', a.name, a.declRange)
             }
         }
     } else {
-        console.error('[DEBUG] Alias has no declRange:', a.name)
+        // console.error('[DEBUG] Alias has no declRange:', a.name)
     }
   }
 &nbsp;
-  console.log('[DEBUG] Final reps:', reps.map(r =&gt; ({ ...r, text: r.text.slice(0, 50) })))
+  // console.log('[DEBUG] Final reps:', reps.map(r =&gt; ({ ...r, text: r.text.slice(0, 50) })))
   if (reps.length) { reps.sort((a, b) =&gt; b.s - a.s); for (const r of reps) s = s.slice(0, r.s) + r.text + s.slice(r.e) }
   // Fallback: plain property chains not followed by call/replace/[ or assignment
   for (const a of aliases) {
@@ -2284,7 +2287,7 @@ export function processComponent(tsCode: string, htmlCode: string, filePath?: st
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-01-08T17:28:31.651Z
+                at 2026-01-16T16:46:44.156Z
             </div>
         <script src="../prettify.js"></script>
         <script>
